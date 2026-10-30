@@ -1,0 +1,28 @@
+__PERIODS__
+outcome_type_delete:
+  - "X"
+  - "_NODATE_"
+outcome_type_in_care:
+  - "InCare"
+outcome_type_L:
+  - "LiveC"
+outcome_type_T:
+  - "Transf"
+outcome_type_N:
+  - "NonL"
+restricted_stay_cap: 365
+plot_stay_cap: 58
+probability_mass_width: 5
+png_pointsize_factor: 2
+png_line_width_factor: 2
+show_aj_cif_ci_ribbons: true
+aj_cif_any: false
+aj_conditional_ci: false
+show_km_ci_ribbons: true
+animal_group_columns:
+  - __GROUP__
+intake_type_reference: STRAY
+period_reference: OLDEST
+discard_bad_rows: false
+discard_overlapping_rows: true
+parametric_regression: false

@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mLOS Web</title>
+<style>
+:root { --bg:#f5f6f4; --card:#fff; --fg:#1c2321; --muted:#5d6865; --line:#d9ddda; --accent:#2f6f5e; --warn:#a1580f; --bad:#b3261e; --ok:#2f6f5e; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; display:flex; flex-direction:column; gap:16px; }
+h1 { margin:0; font-size:26px; }
+h2 { margin:0 0 4px; font-size:18px; }
+p { margin:4px 0; }
+.lede { color:var(--muted); max-width:70ch; }
+section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+section.locked { opacity:.45; pointer-events:none; }
+.step { color:var(--accent); font-weight:600; font-size:13px; letter-spacing:.04em; text-transform:uppercase; }
+.help { color:var(--muted); font-size:14px; max-width:75ch; }
+table { border-collapse:collapse; font-size:13px; }
+th, td { border-bottom:1px solid var(--line); padding:4px 10px 4px 0; text-align:left; vertical-align:top; }
+th { font-weight:600; }
+td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+.scroll { overflow-x:auto; }
+select, input[type=text], input[type=number] { font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:4px; background:#fff; }
+input[type=number] { width:6em; }
+button { font:inherit; padding:8px 16px; border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; align-self:flex-start; }
+button.secondary { background:#fff; color:var(--accent); }
+button:disabled { opacity:.5; cursor:default; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.status { font-size:14px; color:var(--muted); }
+.status.ok { color:var(--ok); } .status.bad { color:var(--bad); } .status.warn { color:var(--warn); }
+.grid2 { display:grid; grid-template-columns: max-content 1fr; gap:6px 12px; align-items:center; }
+pre { background:#f0f2f0; border:1px solid var(--line); border-radius:6px; padding:10px; font-size:12px; overflow:auto; max-height:320px; margin:0; }
+details summary { cursor:pointer; color:var(--accent); font-size:14px; }
+.plots { display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:12px; }
+.plots figure { margin:0; font-size:12px; color:var(--muted); }
+.plots img { width:100%; border:1px solid var(--line); border-radius:4px; background:#fff; }
+.runtime { font-size:13px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>mLOS: from a shelter export to results</h1>
+    <p class="lede">Everything below runs inside this browser tab. The export is read here, prepared by ShelterDataPrep (Python), and analyzed by mLOS (R). Nothing is sent to a server.</p>
+    <p class="runtime" id="runtime-status">Starting Python and R in the background...</p>
+  </header>
+
+  <section id="s1">
+    <span class="step">Step 1</span>
+    <h2>Load the export</h2>
+    <p class="help">A CSV file exported from the shelter's software, one row per stay. The demo file is the Mission Viejo Animal Services export (dogs and cats, 2016 to 2025).</p>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+      <button id="load-demo">Use the Mission Viejo export</button>
+      <label class="help">or choose a file: <input type="file" id="file-input" accept=".csv"></label>
+    </div>
+    <p class="status" id="s1-status"></p>
+    <div class="scroll" id="preview"></div>
+  </section>
+
+  <section id="s2" class="locked">
+    <span class="step">Step 2</span>
+    <h2>Match the columns</h2>
+    <p class="help">Each export names its columns its own way. Pick which column holds each piece of information. Guesses are filled in; check them against the preview above.</p>
+    <div class="grid2" id="mapping"></div>
+  </section>
+
+  <section id="s3" class="locked">
+    <span class="step">Step 3</span>
+    <h2>Choose the date format</h2>
+    <p class="help">The page tries each format on every date in the three date columns. The right format reads all of them. When two formats both read every date, the file cannot tell them apart: check a date you know.</p>
+    <div class="scroll"><table id="date-table"></table></div>
+    <p class="status" id="date-note"></p>
+  </section>
+
+  <section id="s3b" class="locked">
+    <span class="step">Step 4</span>
+    <h2>Set the study window</h2>
+    <p class="help">The span of time to study, from its first day up to, but not including, its stop date. Every stay that overlaps it is kept, including animals already in care on the first day. The analysis later divides this window into periods.</p>
+    <div class="grid2">
+      <label for="win-start">First day</label><input type="date" id="win-start" value="2017-01-01">
+      <label for="win-end">Stop date</label><input type="date" id="win-end" value="2025-01-01">
+    </div>
+    <p class="status" id="win-note"></p>
+  </section>
+
+  <section id="s4" class="locked">
+    <span class="step">Step 5</span>
+    <h2>Define the age groups</h2>
+    <p class="help">Age at intake is computed from the date of birth. Each group runs up to and including its upper age; an animal older than the last group is dropped, and one with no date of birth is counted as _UNKNOWN_.</p>
+    <table id="age-table">
+      <thead><tr><th>Group name</th><th class="num">Up to age (years)</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="help">Leave a name blank to drop that row.</p>
+  </section>
+
+  <section id="s5" class="locked">
+    <span class="step">Step 6</span>
+    <h2>Prepare the data</h2>
+    <p class="help">These choices become a ShelterDataPrep configuration file. The other rules (dogs only, and how this shelter's outcome and intake labels map to mLOS codes) are taken from the existing Mission Viejo configuration and stay fixed in this demo.</p>
+    <details><summary>Show the configuration file</summary><pre id="config-yaml"></pre></details>
+    <button id="prep-btn">Prepare the data</button>
+    <p class="status" id="s5-status"></p>
+    <div id="prep-results"></div>
+  </section>
+
+  <section id="s6" class="locked">
+    <span class="step">Step 7</span>
+    <h2>Run the analysis</h2>
+    <p class="help">mLOS compares periods within the study window. Add up to three dividing dates to split it into as many as four periods, and name each one. The slow features are turned off.</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+      <span class="help">Dividing dates (each starts a new period):</span>
+      <input type="date" id="div-0" value="2019-01-01" aria-label="Dividing date 1">
+      <input type="date" id="div-1" value="2021-01-01" aria-label="Dividing date 2">
+      <input type="date" id="div-2" value="2023-01-01" aria-label="Dividing date 3">
+    </div>
+    <div class="scroll"><table id="period-table"></table></div>
+    <p class="status" id="period-note"></p>
+    <div class="grid2">
+      <label for="group-by">Compare animals by</label>
+      <select id="group-by">
+        <option value="age_group">age group (step 4)</option>
+        <option value="animal_size">size</option>
+      </select>
+    </div>
+    <button id="run-btn">Run mLOS</button>
+    <p class="status" id="s6-status"></p>
+    <div id="run-results"></div>
+  </section>
+  <footer class="runtime" id="versions"></footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v{{PYODIDE_VERSION}}/full/pyodide.js"></script>
+<script type="module">
+import { WebR } from './webr/webr.mjs';
+
+const $ = (id) => document.getElementById(id);
+const root = new URL('./', location.href).href;
+window.demo = { timings: {}, errors: [] };
+const mark = (k, t0) => { window.demo.timings[k] = Math.round(performance.now() - t0) / 1000; };
+
+// ---------- runtimes, started at once in the background ----------
+// manifest.json is written by build_site.py: the pinned versions and the files to load.
+const manifest = await (await fetch('manifest.json')).json();
+const SDP_FILES = manifest.shelterprep.files;
+const MLOS_FILES = manifest.mlos.files;
+$('versions').textContent = `mLOS ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)}), ` +
+  `ShelterDataPrep ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)}), ` +
+  `webR ${manifest.webr}, Pyodide ${manifest.pyodide}.`;
+
+const pyReady = (async () => {
+  const t0 = performance.now();
+  const py = await loadPyodide();
+  await py.loadPackage(['pandas', 'pyyaml']);
+  py.FS.mkdirTree('/sdp/shelterprep');
+  for (const f of SDP_FILES) {
+    py.FS.writeFile('/sdp/shelterprep/' + f, await (await fetch('sdp/shelterprep/' + f)).text());
+  }
+  py.runPython("import sys; sys.path.insert(0, '/sdp'); import shelterprep");
+  mark('python ready', t0);
+  return py;
+})();
+
+const webR = new WebR({ baseUrl: root + 'webr/', repoUrl: root + 'repo/' });
+let rConsole = [];
+const rReady = (async () => {
+  const t0 = performance.now();
+  await webR.init();
+  (async () => { for (;;) { const m = await webR.read(); if (m.type === 'stdout' || m.type === 'stderr') rConsole.push(m.data); } })();
+  await webR.installPackages(['survival', 'yaml', 'jsonlite', 'digest', 'openxlsx'], { repos: [root + 'repo/'], quiet: true });
+  await webR.evalRVoid('suppressPackageStartupMessages({library(survival); library(openxlsx)})');
+  await webR.FS.mkdir('/mlos');
+  for (const f of MLOS_FILES) {
+    await webR.FS.writeFile('/mlos/' + f, new Uint8Array(await (await fetch(root + 'mlos/' + f)).arrayBuffer()));
+  }
+  mark('R ready', t0);
+  return webR;
+})();
+
+Promise.all([pyReady, rReady]).then(() => {
+  $('runtime-status').textContent = 'Python and R are ready (' + window.demo.timings['python ready'] + ' s and ' + window.demo.timings['R ready'] + ' s to start).';
+}, (e) => { $('runtime-status').textContent = 'Could not start: ' + e; window.demo.errors.push(String(e)); });
+
+// ---------- step 1: load ----------
+let exportName = '', exportText = '', header = [], rows = [];
+
+function parseCSV(text, limit = Infinity) {
+  const out = []; let row = [], field = '', q = false, i = 0;
+  if (text.charCodeAt(0) === 0xFEFF) i = 1;
+  for (; i < text.length && out.length < limit; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; } else field += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(field); out.push(row); row = []; field = ''; }
+    else field += c;
+  }
+  if (field || row.length) { row.push(field); out.push(row); }
+  return out;
+}
+
+function loadText(name, text) {
+  exportName = name; exportText = text;
+  const all = parseCSV(text);
+  header = all[0].map(h => h.trim());
+  rows = all.slice(1).filter(r => r.length > 1);
+  $('s1-status').textContent = `${name}: ${rows.length.toLocaleString()} rows, ${header.length} columns. First five rows:`;
+  $('s1-status').className = 'status ok';
+  const t = document.createElement('table');
+  t.innerHTML = '<thead><tr>' + header.map(h => `<th>${esc(h)}</th>`).join('') + '</tr></thead><tbody>' +
+    rows.slice(0, 5).map(r => '<tr>' + r.map(v => `<td>${esc(v)}</td>`).join('') + '</tr>').join('') + '</tbody>';
+  $('preview').replaceChildren(t);
+  buildMapping();
+  for (const id of ['s2', 's3', 's3b', 's4', 's5']) $(id).classList.remove('locked');
+  buildAges();
+  refresh();
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+$('load-demo').onclick = async () => loadText('mission_viejo_export.csv', await (await fetch('data/mission_viejo_export.csv')).text());
+$('file-input').onchange = async (e) => { const f = e.target.files[0]; if (f) loadText(f.name, await f.text()); };
+
+// ---------- step 2: columns ----------
+const FIELDS = [
+  { key: 'animal_id', label: 'Animal ID', hints: ['animalid', 'animal_id', 'animal id', 'animal #'] },
+  { key: 'intake_date', label: 'Intake date', hints: ['indate', 'intake_date', 'intake date', 'in date'] },
+  { key: 'outcome_date', label: 'Outcome date', hints: ['outdate', 'outcome_date', 'outcome date', 'out date'] },
+  { key: 'intake_type', label: 'Intake type', hints: ['intype', 'intake_type', 'intake type'] },
+  { key: 'outcome_type', label: 'Outcome type', hints: ['outtype', 'outcome_type', 'outcome type'] },
+  { key: 'animal_size', label: 'Size', hints: ['petsize', 'animal_size', 'size'] },
+  { key: 'dob', label: 'Date of birth', hints: ['petdob', 'dob', 'date of birth', 'birth date'] },
+];
+function buildMapping() {
+  const g = $('mapping'); g.replaceChildren();
+  for (const f of FIELDS) {
+    const lab = document.createElement('label'); lab.textContent = f.label; lab.htmlFor = 'map-' + f.key;
+    const sel = document.createElement('select'); sel.id = 'map-' + f.key;
+    sel.innerHTML = '<option value="">(choose)</option>' + header.map(h => `<option>${esc(h)}</option>`).join('');
+    const guess = header.find(h => f.hints.includes(h.toLowerCase()));
+    if (guess) sel.value = guess;
+    sel.onchange = refresh;
+    g.append(lab, sel);
+  }
+}
+const mapping = () => Object.fromEntries(FIELDS.map(f => [f.key, $('map-' + f.key).value]));
+
+// ---------- step 3: dates ----------
+const FORMATS = [
+  { py: 'ISO8601', label: 'Year-month-day', example: '2024-01-31', re: /^(\d{4})-(\d{1,2})-(\d{1,2})([ T].*)?$/, order: [1, 2, 3] },
+  { py: '%m/%d/%Y', label: 'Month/day/year', example: '1/31/2024', re: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, order: [3, 1, 2] },
+  { py: '%d/%m/%Y', label: 'Day/month/year', example: '31/1/2024', re: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, order: [3, 2, 1] },
+  { py: '%m/%d/%y', label: 'Month/day/two-digit year', example: '1/31/24', re: /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/, order: [3, 1, 2] },
+];
+function validDate(y, m, d) {
+  if (y < 100) y += 2000;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+let dateFormat = null;
+function buildDates() {
+  const m = mapping();
+  const cols = ['intake_date', 'outcome_date', 'dob'].map(k => header.indexOf(m[k])).filter(i => i >= 0);
+  const values = [];
+  for (const r of rows) for (const i of cols) { const v = (r[i] || '').trim(); if (v) values.push(v); }
+  const t = $('date-table');
+  t.innerHTML = '<thead><tr><th></th><th>Format</th><th>Example</th><th class="num">Dates read</th><th class="num">Not read</th></tr></thead>';
+  const body = document.createElement('tbody');
+  const counts = FORMATS.map(f => values.filter(v => { const x = f.re.exec(v); return x && validDate(+x[f.order[0]], +x[f.order[1]], +x[f.order[2]]); }).length);
+  const best = Math.max(...counts);
+  if (!dateFormat || counts[FORMATS.findIndex(f => f.py === dateFormat)] < best) dateFormat = FORMATS[counts.indexOf(best)].py;
+  FORMATS.forEach((f, k) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><input type="radio" name="datefmt" id="fmt-${k}" value="${f.py}" ${f.py === dateFormat ? 'checked' : ''}></td>
+      <td><label for="fmt-${k}">${f.label}</label></td><td>${f.example}</td>
+      <td class="num">${counts[k].toLocaleString()}</td><td class="num">${(values.length - counts[k]).toLocaleString()}</td>`;
+    tr.querySelector('input').onchange = (e) => { dateFormat = e.target.value; refresh(false); };
+    body.append(tr);
+  });
+  t.append(body);
+  const full = FORMATS.filter((f, k) => counts[k] === values.length && values.length > 0);
+  const note = $('date-note');
+  if (full.length > 1) { note.className = 'status warn'; note.textContent = 'Every date reads as ' + full.map(f => f.label.toLowerCase()).join(' and as ') + '. Check one date you know before going on.'; }
+  else if (counts[FORMATS.findIndex(f => f.py === dateFormat)] < values.length) { note.className = 'status warn'; note.textContent = 'No format reads every date. Dates that are not read are treated as missing, and ShelterDataPrep counts them.'; }
+  else { note.className = 'status ok'; note.textContent = 'One format reads every date: ' + FORMATS.find(f => f.py === dateFormat).label.toLowerCase() + '.'; }
+  window.demo.dateCounts = Object.fromEntries(FORMATS.map((f, k) => [f.py, counts[k]]));
+  window.demo.dateTotal = values.length;
+}
+
+// ---------- step 4: ages ----------
+const DEFAULT_AGES = [['JUVENILE', 1], ['YOUNG', 4], ['ADULT', 9], ['SENIOR', 18], ['', ''], ['', '']];
+function buildAges() {
+  const tb = $('age-table').tBodies[0];
+  if (tb.rows.length) return;
+  DEFAULT_AGES.forEach(([n, a], k) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><input type="text" id="age-name-${k}" value="${n}" aria-label="Group name ${k + 1}"></td>
+      <td class="num"><input type="number" id="age-max-${k}" value="${a}" min="0" step="0.5" aria-label="Upper age ${k + 1}"></td>`;
+    tr.querySelectorAll('input').forEach(i => i.oninput = () => refresh(false));
+    tb.append(tr);
+  });
+}
+function ageGroups() {
+  const out = [];
+  for (let k = 0; k < DEFAULT_AGES.length; k++) {
+    const n = $('age-name-' + k).value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    const a = parseFloat($('age-max-' + k).value);
+    if (n && Number.isFinite(a)) out.push([n, a]);
+  }
+  return out.sort((x, y) => x[1] - y[1]);
+}
+
+// ---------- step 5: configuration ----------
+const FIXED_RULES = `
+# --- fixed for this demo, from ShelterDataPrep's configs/mission_viejo.yaml ---
+unique_report: [animal_id]
+steps:
+  - cut: {window_presence: [BEFORE, AFTER, _UNKNOWN_]}
+  - cut: {animaltype: CAT}
+  - cut: {intake_type: QUARANTINE}
+  - cut: {outcome_type: [MUTLAID, "OWNER SURR", "TRANS QT"]}
+  - map:
+      outcome_type:
+        ADOPTION:  LiveC
+        RTO:       LiveC
+        RESCUE:    Transf
+        TRANSFER:  Transf
+        EUTH:      NonL
+        DIED:      NonL
+        MISSING:   NonL
+        _UNKNOWN_: InCare
+  - map: {outcome_type: {LiveC: _NODATE_, Transf: _NODATE_, NonL: _NODATE_}}
+    where: {night_sign: _UNKNOWN_}
+  - map:
+      intake_type:
+        STRAY:        STRAY
+        RELINQUISH:   OWNER
+        CONFISCATE:   OTHER
+        EVACUEE:      OTHER
+        "MUTUAL AID": OTHER
+        "POLICE IMP": OTHER
+        RESCUE:       OTHER
+        RETURN:       OTHER
+        SHELASSIST:   OTHER
+        TRANSFER:     OTHER
+        "VET ASSIST": OTHER
+        WELFARE:      OTHER
+  - map:
+      animal_size:
+        LARGE:  LRG
+        X-LRG:  XL
+        KITEN:  _UNKNOWN_
+        905V:   _UNKNOWN_
+  - map: {age_group: {_NEGATIVE_: _UNKNOWN_}}
+  - map: {age_group: {_UNKNOWN_: ${'${FIRST_AGE}'}}}
+    where: {animal_size: PUPPY}
+  - cut: {night_sign: "-1"}
+  - cut: {age_group: _OVER_}
+  - dedup:
+    where: {night_sign: "1"}
+`;
+function configYaml() {
+  const m = mapping();
+  const ages = ageGroups();
+  const cols = FIELDS.filter(f => m[f.key]).map(f => `  ${f.key}: ${JSON.stringify(m[f.key])}`).join('\n');
+  return `# Written by the demo page from steps 2 to 5.
+source_dir:  "/work"
+source_file: "export.csv"
+date_format: ${JSON.stringify(dateFormat)}
+dest_dir:    "/work/out"
+dest_file:   "prepared.csv"
+output_columns: [animal_id, intake_date, outcome_date, outcome_type, intake_type, animal_size, age_group]
+
+# step 2: the export's column for each piece of information
+columns:
+${cols}
+
+# step 4: the study window; a stay overlapping it is kept
+window_start_date: ${$('win-start').value}
+window_stop_date:  ${$('win-end').value}
+
+# step 5: age groups, each up to and including its upper age in years
+age_groups: {${ages.map(([n, a]) => `${n}: ${a}`).join(', ')}}
+` + FIXED_RULES.replace('${FIRST_AGE}', ages.length ? ages[0][0] : '_UNKNOWN_');
+}
+
+function isoOf(v) {
+  const f = FORMATS.find(f => f.py === dateFormat), x = f && f.re.exec((v || '').trim());
+  if (!x) return null;
+  let y = +x[f.order[0]]; if (y < 100) y += 2000;
+  return `${y}-${String(+x[f.order[1]]).padStart(2, '0')}-${String(+x[f.order[2]]).padStart(2, '0')}`;
+}
+function windowNote() {
+  const i = header.indexOf(mapping().intake_date);
+  const d = rows.map(r => isoOf(r[i])).filter(Boolean).sort();
+  const s = $('win-start').value, e = $('win-end').value, note = $('win-note');
+  if (!d.length) { note.textContent = ''; return; }
+  const after = d.filter(x => x >= e).length;
+  note.className = s && e && s < e ? 'status' : 'status bad';
+  note.textContent = !(s && e && s < e) ? 'The first day must come before the stop date.' :
+    `The export's intake dates run from ${d[0]} to ${d[d.length - 1]}.` + (after ? ` ${after.toLocaleString()} intake(s) fall on or after the stop date and will be dropped.` : '');
+}
+function refresh(rebuildDates = true) {
+  if (!header.length) return;
+  if (rebuildDates) buildDates();
+  windowNote();
+  buildPeriods();
+  $('config-yaml').textContent = configYaml();
+}
+
+// ---------- step 5: run ShelterDataPrep ----------
+let prepared = null;
+$('prep-btn').onclick = async () => {
+  const st = $('s5-status');
+  $('prep-btn').disabled = true; $('prep-results').replaceChildren(); $('s6').classList.add('locked');
+  st.className = 'status'; st.textContent = 'Waiting for Python...';
+  const py = await pyReady;
+  st.textContent = 'Preparing...';
+  const t0 = performance.now();
+  try {
+    py.FS.mkdirTree('/work/out');
+    py.FS.writeFile('/work/export.csv', exportText);
+    py.FS.writeFile('/work/config.yaml', configYaml());
+    const report = py.runPython(`
+import io, contextlib
+from shelterprep import load, Prep
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    Prep(load('/work/config.yaml')).run()
+buf.getvalue()`);
+    mark('prepare', t0);
+    prepared = py.FS.readFile('/work/out/prepared.csv', { encoding: 'utf8' });
+    const statsText = py.FS.readFile('/work/out/prepared_stats.csv', { encoding: 'utf8' });
+    showPrep(parseCSV(statsText), prepared, statsText);
+    st.className = 'status ok';
+    st.textContent = `Prepared in ${window.demo.timings.prepare} s.`;
+    $('s6').classList.remove('locked');
+    window.demo.prepReport = report;
+  } catch (e) {
+    const msg = String(e.message || e).split('\n').filter(Boolean);
+    st.className = 'status bad';
+    st.textContent = 'ShelterDataPrep stopped: ' + (msg.find(l => /Error:/.test(l)) || msg[msg.length - 1]);
+    window.demo.errors.push(String(e));
+  }
+  $('prep-btn').disabled = false;
+};
+
+function countBy(csvRows, col) {
+  const i = csvRows[0].indexOf(col), c = {};
+  for (const r of csvRows.slice(1)) if (r.length > 1) c[r[i]] = (c[r[i]] || 0) + 1;
+  return Object.entries(c).sort((a, b) => b[1] - a[1]);
+}
+function fileLink(name, data, type, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type }));
+  a.download = name; a.textContent = text || name;
+  return a;
+}
+function showPrep(stats, preparedText, statsText) {
+  const h = stats[0], col = (r, n) => r[h.indexOf(n)];
+  const stage = stats.slice(1).filter(r => r.length > 3 && col(r, 'section') === 'stage');
+  const detail = stats.slice(1).filter(r => r.length > 3 && col(r, 'section') === 'detail');
+  const rowsP = parseCSV(preparedText);
+  const wrap = $('prep-results');
+  const num = (v) => v === '' ? '' : (+v).toLocaleString();
+  let html = '<caption class="help" style="text-align:left">What each step did. Indented lines count the rows matched by each value the step names.</caption>' +
+    '<thead><tr><th>Step</th><th>Action</th><th>Rule</th><th class="num">Rows in</th><th class="num">Changed or removed</th><th class="num">Rows out</th></tr></thead><tbody>';
+  for (const r of stage) {
+    const step = col(r, 'step'), action = col(r, 'action');
+    const rule = action === 'write' ? 'write ' + col(r, 'column') :
+                 action === 'parse_dates' ? col(r, 'column') + ': ' + col(r, 'detail') : col(r, 'detail');
+    html += `<tr><td>${esc(step)}</td><td>${esc(action)}</td><td>${esc(rule)}</td><td class="num">${num(col(r, 'rows_in'))}</td>` +
+            `<td class="num">${num(col(r, 'rows_affected'))}</td><td class="num">${num(col(r, 'rows_out'))}</td></tr>`;
+    for (const d of detail.filter(d => col(d, 'step') === step)) {
+      const what = col(d, 'role') === 'where' ? `only where ${col(d, 'column')} is ${col(d, 'value')}` : `${col(d, 'column')} = ${col(d, 'value')}`;
+      html += `<tr class="sub"><td></td><td></td><td style="padding-left:16px; color:var(--muted)">${esc(what)}</td><td></td>` +
+              `<td class="num" style="color:var(--muted)">${num(col(d, 'rows_affected'))}</td><td></td></tr>`;
+    }
+  }
+  const t = document.createElement('table'); t.innerHTML = html + '</tbody>';
+  const ages = countBy(rowsP, 'age_group');
+  const a = document.createElement('table');
+  a.innerHTML = '<caption class="help" style="text-align:left">Stays by age group</caption><thead><tr><th>Age group</th><th class="num">Stays</th></tr></thead><tbody>' +
+    ages.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="num">${n.toLocaleString()}</td></tr>`).join('') + '</tbody>';
+  const flex = document.createElement('div');
+  flex.style.cssText = 'display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start';
+  const sc = document.createElement('div'); sc.className = 'scroll'; sc.append(t);
+  flex.append(sc, a);
+  const links = document.createElement('p'); links.className = 'help';
+  links.append('Save: ', fileLink('prepared.csv', preparedText, 'text/csv', 'the prepared data'), ', ',
+               fileLink('prepared_stats.csv', statsText, 'text/csv', 'the full step table'), ', ',
+               fileLink('shelterprep_config.yaml', configYaml(), 'text/yaml', 'the configuration file'), '.');
+  wrap.append(flex, links);
+  window.demo.preparedRows = rowsP.length - 1;
+  window.demo.ageCounts = Object.fromEntries(ages);
+  window.demo.detailRows = detail.length;
+}
+
+// ---------- step 7: periods ----------
+const addDay = (iso, n) => { const t = new Date(iso + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+const labelEdited = {};
+function periodSpec() {
+  const s = $('win-start').value, e = $('win-end').value;
+  const divs = [0, 1, 2].map(k => $('div-' + k).value).filter(Boolean);
+  const problems = [];
+  for (const v of divs) if (!(v > s && v < e)) problems.push(`${v} is outside the study window`);
+  if (new Set(divs).size !== divs.length) problems.push('two dividing dates are the same');
+  const bounds = [s, ...divs.filter(v => v > s && v < e).sort(), e];
+  const periods = bounds.slice(0, -1).map((from, k) => ({ from, stop: bounds[k + 1] }));
+  return { bounds: [...new Set(bounds)], periods, problems };
+}
+function buildPeriods() {
+  const { periods, problems } = periodSpec();
+  const t = $('period-table');
+  const prev = periods.map((p, k) => $('plabel-' + k) ? $('plabel-' + k).value : null);
+  t.innerHTML = '<thead><tr><th>Period</th><th>Starts</th><th>Stops</th><th>Name</th></tr></thead>';
+  const body = document.createElement('tbody');
+  periods.forEach((p, k) => {
+    const y0 = p.from.slice(0, 4), y1 = addDay(p.stop, -1).slice(0, 4);
+    const auto = y0 === y1 ? y0 : `${y0}-${y1}`;
+    const value = labelEdited[k] && prev[k] != null ? prev[k] : auto;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${k + 1}</td><td>${p.from}</td><td>${p.stop}</td><td><input type="text" id="plabel-${k}" value="${esc(value)}" aria-label="Name of period ${k + 1}"></td>`;
+    tr.querySelector('input').oninput = () => { labelEdited[k] = true; periodCheck(); };
+    body.append(tr);
+  });
+  t.append(body);
+  window.demo.periodProblems = problems;
+  periodCheck();
+}
+function periodLabels() {
+  return periodSpec().periods.map((p, k) => $('plabel-' + k).value.trim());
+}
+function periodCheck() {
+  const { problems } = periodSpec();
+  const labels = periodLabels();
+  if (labels.some(l => !l)) problems.push('every period needs a name');
+  if (labels.some(l => /[,=]/.test(l))) problems.push('a name cannot contain a comma or an equals sign');
+  if (new Set(labels).size !== labels.length) problems.push('two periods have the same name');
+  const note = $('period-note');
+  note.className = problems.length ? 'status bad' : 'status';
+  note.textContent = problems.length ? 'Fix before running: ' + problems.join('; ') + '.' : '';
+  return problems;
+}
+['div-0', 'div-1', 'div-2'].forEach(id => $(id).addEventListener('change', () => refresh(false)));
+['win-start', 'win-end'].forEach(id => $(id).addEventListener('change', () => {
+  refresh(false);
+  if (prepared) {
+    prepared = null; $('s6').classList.add('locked'); $('prep-results').replaceChildren();
+    $('s5-status').className = 'status warn'; $('s5-status').textContent = 'The window changed. Prepare the data again.';
+  }
+}));
+function periodsYaml() {
+  const { bounds } = periodSpec();
+  return 'period_dates:\n' + bounds.map(b => `  - ${b}`).join('\n') +
+    '\nperiod_labels:\n' + periodLabels().map(l => `  - ${JSON.stringify(l)}`).join('\n');
+}
+
+// ---------- step 7: run mLOS ----------
+const CAPS = { intake_type: 6, group: 6 };
+let runNo = 0;
+$('run-btn').onclick = async () => {
+  const st = $('s6-status');
+  const group = $('group-by').value;
+  $('run-results').replaceChildren();
+  const rowsP = parseCSV(prepared);
+  const groupLevels = countBy(rowsP, group), intakeLevels = countBy(rowsP, 'intake_type');
+  if (periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
+  if (groupLevels.length > CAPS.group || intakeLevels.length > CAPS.intake_type) {
+    const [col, lv] = groupLevels.length > CAPS.group ? [group, groupLevels] : ['intake_type', intakeLevels];
+    st.className = 'status bad';
+    st.textContent = `This tool compares at most 6 groups, and ${col} has ${lv.length}: ${lv.map(x => x[0]).join(', ')}. Merge some of them, or compare by a different column.`;
+    window.demo.capRefusal = st.textContent;
+    return;
+  }
+  $('run-btn').disabled = true;
+  st.className = 'status'; st.textContent = 'Waiting for R...';
+  await rReady;
+  st.textContent = 'Running mLOS (keep this tab in front)...';
+  const out = '/out_' + (++runNo);
+  const template = await (await fetch('mlos_settings_template.yaml')).text();
+  await webR.FS.writeFile('/mlos/settings.yaml', new TextEncoder().encode(template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml())));
+  await webR.FS.writeFile('/mlos/prepared.csv', new TextEncoder().encode(prepared));
+  rConsole = [];
+  const t0 = performance.now();
+  try {
+    await webR.evalRVoid(`setwd('/mlos')
+      Sys.setenv(MLOS_SETTINGS_FILE = 'settings.yaml', MLOS_DATA_FILE = 'prepared.csv', MLOS_OUTPUT_DIR = '${out}')
+      source('mlos_run_complete.R')`);
+    mark('analyze', t0);
+    st.className = 'status ok';
+    st.textContent = `Finished in ${window.demo.timings.analyze} s.`;
+    await showRun(out, group);
+  } catch (e) {
+    st.className = 'status bad';
+    st.textContent = 'mLOS stopped: ' + (e.message || e);
+    window.demo.errors.push(String(e));
+  }
+  $('run-btn').disabled = false;
+};
+
+const DEFAULT_PLOTS = ['km_survival_unified.png', 'km_in_care_tenure_unified.png', 'km_remaining_los_unified.png',
+                       'km_survival_by_period.png', 'km_survival_by_animal_group.png', 'aj_cif_unified_stack.png'];
+let chosenPlots = [...DEFAULT_PLOTS];
+
+async function showRun(out, group) {
+  const sh = await new webR.Shelter();
+  let names;
+  try {
+    names = await (await sh.evalR(`list.files('${out}')`)).toArray();
+    await sh.evalR(`zip::zip('/tmp/mlos_results.zip', files = list.files('${out}'), root = '${out}')`);
+  } finally { sh.purge(); }
+  window.demo.outputs = names;
+  window.demo.outputDir = out;
+  window.demo.webR = webR;
+  const pngs = names.filter(n => n.endsWith('.png'));
+  const images = {};
+  for (const n of pngs) images[n] = URL.createObjectURL(new Blob([await webR.FS.readFile(out + '/' + n)], { type: 'image/png' }));
+  const zipBytes = await webR.FS.readFile('/tmp/mlos_results.zip');
+  window.demo.zipBytes = zipBytes.length;
+
+  const wrap = $('run-results');
+  const intro = document.createElement('p'); intro.className = 'help';
+  intro.append(`${names.length} files were written: ${pngs.length} plots, each with a CSV of its numbers, plus the Excel workbook, results.json, and the log. `,
+               fileLink('mlos_results.zip', zipBytes, 'application/zip', `Download all ${names.length} files (zip, ${(zipBytes.length / 1e6).toFixed(1)} MB)`), '.');
+  const grid = document.createElement('div'); grid.className = 'plots';
+  const draw = () => {
+    grid.replaceChildren();
+    for (const n of chosenPlots.filter(n => images[n])) {
+      const fig = document.createElement('figure');
+      fig.innerHTML = `<img alt="${n}"><figcaption>${n}</figcaption>`;
+      fig.querySelector('img').src = images[n];
+      grid.append(fig);
+    }
+    window.demo.shown = chosenPlots.filter(n => images[n]);
+  };
+  const pick = document.createElement('details');
+  pick.innerHTML = '<summary>Choose which plots to show</summary>';
+  const list = document.createElement('div');
+  list.style.cssText = 'columns: 2 280px; font-size:13px; margin-top:8px';
+  pngs.forEach((n, k) => {
+    const lab = document.createElement('label'); lab.style.display = 'block';
+    lab.innerHTML = `<input type="checkbox" id="plot-${k}" ${chosenPlots.includes(n) ? 'checked' : ''}> ${n}`;
+    lab.querySelector('input').onchange = (e) => {
+      chosenPlots = e.target.checked ? [...chosenPlots, n] : chosenPlots.filter(x => x !== n);
+      draw();
+    };
+    list.append(lab);
+  });
+  const reset = document.createElement('button'); reset.className = 'secondary'; reset.textContent = 'Back to the default six';
+  reset.style.marginTop = '8px';
+  reset.onclick = () => { chosenPlots = [...DEFAULT_PLOTS]; list.querySelectorAll('input').forEach((i, k) => i.checked = chosenPlots.includes(pngs[k])); draw(); };
+  pick.append(list, reset);
+  draw();
+  wrap.append(intro, grid, pick);
+  const log = new TextDecoder().decode(await webR.FS.readFile(out + '/analysis_log.txt'));
+  const d = document.createElement('details');
+  d.innerHTML = '<summary>Show the mLOS log</summary><pre></pre>';
+  d.querySelector('pre').textContent = log;
+  wrap.append(d);
+}
+</script>
+</body>
+</html>
