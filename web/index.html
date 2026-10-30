@@ -99,7 +99,7 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
   <section id="s5" class="locked">
     <span class="step">Step 6</span>
     <h2>Prepare the data</h2>
-    <p class="help">These choices become a ShelterDataPrep configuration file. The other rules (dogs only, and how this shelter's outcome and intake labels map to mLOS codes) are taken from the existing Mission Viejo configuration and stay fixed in this demo.</p>
+    <p class="help">These choices become a ShelterDataPrep configuration file. The other rules (dogs only, and how this shelter's intake labels map to groups) are taken from the existing Mission Viejo configuration and stay fixed in this demo. Outcome labels pass through unchanged and are classified in step 7.</p>
     <details><summary>Show the configuration file</summary><pre id="config-yaml"></pre></details>
     <button id="prep-btn">Prepare the data</button>
     <p class="status" id="s5-status"></p>
@@ -109,6 +109,11 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
   <section id="s6" class="locked">
     <span class="step">Step 7</span>
     <h2>Run the analysis</h2>
+    <h3 style="margin:4px 0 0; font-size:15px">Classify the outcomes</h3>
+    <p class="help">Each outcome label in the prepared data, with the number of stays that end in it. Choose what each one means. Guesses are filled in where the label is a common one; every label needs a choice before the analysis can run.</p>
+    <div class="scroll"><table id="outcome-table"></table></div>
+    <p class="status" id="outcome-note"></p>
+    <h3 style="margin:8px 0 0; font-size:15px">Set the periods</h3>
     <p class="help">mLOS compares periods within the study window. Add up to three dividing dates to split it into as many as four periods, and name each one. The slow features are turned off.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
       <span class="help">Dividing dates (each starts a new period):</span>
@@ -319,20 +324,7 @@ steps:
   - cut: {window_presence: [BEFORE, AFTER, _UNKNOWN_]}
   - cut: {animaltype: CAT}
   - cut: {intake_type: QUARANTINE}
-  - cut: {outcome_type: [MUTLAID, "OWNER SURR", "TRANS QT"]}
-  - map:
-      outcome_type:
-        ADOPTION:  LiveC
-        RTO:       LiveC
-        RESCUE:    Transf
-        TRANSFER:  Transf
-        EUTH:      NonL
-        DIED:      NonL
-        MISSING:   NonL
-        _UNKNOWN_: InCare
-  - map: {outcome_type: {LiveC: _NODATE_, Transf: _NODATE_, NonL: _NODATE_}}
-    where: {night_sign: _UNKNOWN_}
-  - map:
+${'${NODATE_STEP}'}  - map:
       intake_type:
         STRAY:        STRAY
         RELINQUISH:   OWNER
@@ -382,7 +374,7 @@ window_stop_date:  ${$('win-end').value}
 
 # step 5: age groups, each up to and including its upper age in years
 age_groups: {${ages.map(([n, a]) => `${n}: ${a}`).join(', ')}}
-` + FIXED_RULES.replace('${FIRST_AGE}', ages.length ? ages[0][0] : '_UNKNOWN_');
+` + FIXED_RULES.replace('${FIRST_AGE}', ages.length ? ages[0][0] : '_UNKNOWN_').replace('${NODATE_STEP}', nodateStep());
 }
 
 function isoOf(v) {
@@ -401,6 +393,22 @@ function windowNote() {
   note.textContent = !(s && e && s < e) ? 'The first day must come before the stop date.' :
     `The export's intake dates run from ${d[0]} to ${d[d.length - 1]}.` + (after ? ` ${after.toLocaleString()} intake(s) fall on or after the stop date and will be dropped.` : '');
 }
+// Outcome labels pass through ShelterDataPrep unchanged and are classified in
+// step 7. One step stays here: a row naming an outcome but carrying no usable
+// outcome date is marked _NODATE_, which mLOS deletes. A blank outcome reads as
+// _UNKNOWN_ and is left alone, since it means the animal is still in care.
+function rawOutcomeLabels() {
+  const i = header.indexOf(mapping().outcome_type);
+  if (i < 0) return [];
+  return [...new Set(rows.map(r => (r[i] || '').trim()).filter(v => v && v !== '_NODATE_'))].sort();
+}
+function nodateStep() {
+  const labels = rawOutcomeLabels();
+  if (!labels.length) return '';
+  return '  - map:\n      outcome_type:\n' + labels.map(l => `        ${JSON.stringify(l)}: _NODATE_`).join('\n') +
+         '\n    where: {night_sign: _UNKNOWN_}\n';
+}
+
 function refresh(rebuildDates = true) {
   if (!header.length) return;
   if (rebuildDates) buildDates();
@@ -436,6 +444,7 @@ buf.getvalue()`);
     st.className = 'status ok';
     st.textContent = `Prepared in ${window.demo.timings.prepare} s.`;
     $('s6').classList.remove('locked');
+    buildOutcomes();
     window.demo.prepReport = report;
   } catch (e) {
     const msg = String(e.message || e).split('\n').filter(Boolean);
@@ -495,6 +504,77 @@ function showPrep(stats, preparedText, statsText) {
   window.demo.preparedRows = rowsP.length - 1;
   window.demo.ageCounts = Object.fromEntries(ages);
   window.demo.detailRows = detail.length;
+}
+
+// ---------- step 7: outcomes ----------
+const OUTCOME_CLASSES = [
+  { key: 'L', label: 'Community live', help: 'adoption, return to owner' },
+  { key: 'T', label: 'Other live', help: 'transfer, rescue partner, foster, return to field' },
+  { key: 'N', label: 'Non-live', help: 'euthanasia, died, lost' },
+  { key: 'in_care', label: 'Still in care', help: 'no outcome yet' },
+  { key: 'delete', label: 'Not a stay', help: 'the row is removed' },
+];
+const OUTCOME_GUESSES = [
+  [/^_UNKNOWN_$/, 'in_care'],
+  [/RTF|FIELD/, 'T'],
+  [/ADOPT|^RTO|RETURN.*OWNER|RECLAIM/, 'L'],
+  [/TRANSFER|RESCUE|FOSTER|PARTNER/, 'T'],
+  [/EUTH|DIED|DEATH|DEAD|MISSING|LOST|STOLEN/, 'N'],
+];
+let outcomeChoice = {};
+function guessOutcome(label) {
+  const u = label.toUpperCase();
+  for (const [re, k] of OUTCOME_GUESSES) if (re.test(u)) return k;
+  return '';
+}
+function buildOutcomes() {
+  const counts = countBy(parseCSV(prepared), 'outcome_type');
+  const t = $('outcome-table');
+  t.innerHTML = '<thead><tr><th>Outcome label</th><th class="num">Stays</th><th>Means</th></tr></thead>';
+  const body = document.createElement('tbody');
+  counts.forEach(([label, n], k) => {
+    const tr = document.createElement('tr');
+    if (label === '_NODATE_') {
+      tr.innerHTML = `<td>(an outcome with no outcome date)</td><td class="num">${n.toLocaleString()}</td><td class="help">removed: the stay has no end to measure</td>`;
+      body.append(tr);
+      return;
+    }
+    if (!(label in outcomeChoice)) outcomeChoice[label] = guessOutcome(label);
+    const shown = label === '_UNKNOWN_' ? '(blank)' : label;
+    tr.innerHTML = `<td>${esc(shown)}</td><td class="num">${n.toLocaleString()}</td><td><select id="outcome-${k}" aria-label="Meaning of ${esc(shown)}">` +
+      '<option value="">(choose)</option>' + OUTCOME_CLASSES.map(c => `<option value="${c.key}">${c.label}: ${c.help}</option>`).join('') + '</select></td>';
+    const sel = tr.querySelector('select');
+    sel.value = outcomeChoice[label];
+    sel.onchange = () => { outcomeChoice[label] = sel.value; outcomeCheck(); };
+    body.append(tr);
+  });
+  t.append(body);
+  window.demo.outcomeLabels = counts.map(c => c[0]);
+  outcomeCheck();
+}
+function outcomeLabelsInData() {
+  return countBy(parseCSV(prepared), 'outcome_type').map(c => c[0]).filter(l => l !== '_NODATE_');
+}
+function outcomeCheck() {
+  const labels = outcomeLabelsInData();
+  const problems = [];
+  const open = labels.filter(l => !outcomeChoice[l]);
+  if (open.length) problems.push('choose a meaning for ' + open.map(l => l === '_UNKNOWN_' ? '(blank)' : l).join(', '));
+  if (!labels.some(l => ['L', 'T', 'N'].includes(outcomeChoice[l]))) problems.push('at least one label must be an outcome (community live, other live, or non-live)');
+  const note = $('outcome-note');
+  note.className = problems.length ? 'status warn' : 'status';
+  note.textContent = problems.length ? 'Before running: ' + problems.join('; ') + '.' : '';
+  return problems;
+}
+function outcomesYaml() {
+  const labels = outcomeLabelsInData();
+  const list = (k) => labels.filter(l => outcomeChoice[l] === k);
+  const yamlList = (key, vals) => vals.length ? `${key}:\n` + vals.map(v => `  - ${JSON.stringify(v)}`).join('\n') : `${key}: []`;
+  return [yamlList('outcome_type_delete', ['_NODATE_', ...list('delete')]),
+          yamlList('outcome_type_in_care', list('in_care')),
+          yamlList('outcome_type_L', list('L')),
+          yamlList('outcome_type_T', list('T')),
+          yamlList('outcome_type_N', list('N'))].join('\n');
 }
 
 // ---------- step 7: periods ----------
@@ -566,6 +646,7 @@ $('run-btn').onclick = async () => {
   $('run-results').replaceChildren();
   const rowsP = parseCSV(prepared);
   const groupLevels = countBy(rowsP, group), intakeLevels = countBy(rowsP, 'intake_type');
+  if (outcomeCheck().length) { st.className = 'status bad'; st.textContent = 'Classify every outcome label first.'; return; }
   if (periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
   if (groupLevels.length > CAPS.group || intakeLevels.length > CAPS.intake_type) {
     const [col, lv] = groupLevels.length > CAPS.group ? [group, groupLevels] : ['intake_type', intakeLevels];
@@ -580,7 +661,9 @@ $('run-btn').onclick = async () => {
   st.textContent = 'Running mLOS (keep this tab in front)...';
   const out = '/out_' + (++runNo);
   const template = await (await fetch('mlos_settings_template.yaml')).text();
-  await webR.FS.writeFile('/mlos/settings.yaml', new TextEncoder().encode(template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml())));
+  const settingsText = template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml());
+  window.demo.settingsYaml = settingsText;
+  await webR.FS.writeFile('/mlos/settings.yaml', new TextEncoder().encode(settingsText));
   await webR.FS.writeFile('/mlos/prepared.csv', new TextEncoder().encode(prepared));
   rConsole = [];
   const t0 = performance.now();
@@ -654,6 +737,10 @@ async function showRun(out, group) {
   pick.append(list, reset);
   draw();
   wrap.append(intro, grid, pick);
+  const sd = document.createElement('details');
+  sd.innerHTML = '<summary>Show the mLOS settings file</summary><pre></pre>';
+  sd.querySelector('pre').textContent = window.demo.settingsYaml;
+  wrap.append(sd);
   const log = new TextDecoder().decode(await webR.FS.readFile(out + '/analysis_log.txt'));
   const d = document.createElement('details');
   d.innerHTML = '<summary>Show the mLOS log</summary><pre></pre>';

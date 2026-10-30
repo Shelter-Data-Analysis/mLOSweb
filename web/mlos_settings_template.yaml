@@ -1,15 +1,5 @@
 __PERIODS__
-outcome_type_delete:
-  - "X"
-  - "_NODATE_"
-outcome_type_in_care:
-  - "InCare"
-outcome_type_L:
-  - "LiveC"
-outcome_type_T:
-  - "Transf"
-outcome_type_N:
-  - "NonL"
+__OUTCOMES__
 restricted_stay_cap: 365
 plot_stay_cap: 58
 probability_mass_width: 5
