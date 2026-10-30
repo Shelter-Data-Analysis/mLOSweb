@@ -99,7 +99,7 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
   <section id="s5" class="locked">
     <span class="step">Step 6</span>
     <h2>Prepare the data</h2>
-    <p class="help">These choices become a ShelterDataPrep configuration file. The other rules (dogs only, and how this shelter's intake labels map to groups) are taken from the existing Mission Viejo configuration and stay fixed in this demo. Outcome labels pass through unchanged and are classified in step 7.</p>
+    <p class="help">These choices become a ShelterDataPrep configuration file. The other rules (dogs only, and quarantine holds removed as not shelter stays) are taken from the existing Mission Viejo configuration and stay fixed in this demo. Outcome and intake labels pass through unchanged and are classified in step 7.</p>
     <details><summary>Show the configuration file</summary><pre id="config-yaml"></pre></details>
     <button id="prep-btn">Prepare the data</button>
     <p class="status" id="s5-status"></p>
@@ -113,6 +113,11 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <p class="help">Each outcome label in the prepared data, with the number of stays that end in it. Choose what each one means. Guesses are filled in where the label is a common one; every label needs a choice before the analysis can run.</p>
     <div class="scroll"><table id="outcome-table"></table></div>
     <p class="status" id="outcome-note"></p>
+    <h3 style="margin:8px 0 0; font-size:15px">Group the intake types</h3>
+    <p class="help">Each intake label in the prepared data, with its number of stays. Give each one a group name; labels with the same name are combined into one group, and the analysis compares the groups. Up to six groups. Tick "Leave out" to study only the other intakes.</p>
+    <div class="scroll"><table id="intake-table"></table></div>
+    <datalist id="intake-groups"></datalist>
+    <p class="status" id="intake-note"></p>
     <h3 style="margin:8px 0 0; font-size:15px">Set the periods</h3>
     <p class="help">mLOS compares periods within the study window. Add up to three dividing dates to split it into as many as four periods, and name each one. The slow features are turned off.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
@@ -325,20 +330,6 @@ steps:
   - cut: {animaltype: CAT}
   - cut: {intake_type: QUARANTINE}
 ${'${NODATE_STEP}'}  - map:
-      intake_type:
-        STRAY:        STRAY
-        RELINQUISH:   OWNER
-        CONFISCATE:   OTHER
-        EVACUEE:      OTHER
-        "MUTUAL AID": OTHER
-        "POLICE IMP": OTHER
-        RESCUE:       OTHER
-        RETURN:       OTHER
-        SHELASSIST:   OTHER
-        TRANSFER:     OTHER
-        "VET ASSIST": OTHER
-        WELFARE:      OTHER
-  - map:
       animal_size:
         LARGE:  LRG
         X-LRG:  XL
@@ -445,6 +436,7 @@ buf.getvalue()`);
     st.textContent = `Prepared in ${window.demo.timings.prepare} s.`;
     $('s6').classList.remove('locked');
     buildOutcomes();
+    buildIntakes();
     window.demo.prepReport = report;
   } catch (e) {
     const msg = String(e.message || e).split('\n').filter(Boolean);
@@ -577,6 +569,73 @@ function outcomesYaml() {
           yamlList('outcome_type_N', list('N'))].join('\n');
 }
 
+// ---------- step 7: intakes ----------
+// Kept labels are renamed to their group with intake_type_map, and the group
+// names are listed in intake_filter_pass. A left-out label is never renamed,
+// so it fails the pass filter; no placeholder value is needed.
+const INTAKE_CAP = 6;
+let intakeChoice = {};
+const shownLabel = (l) => l === '_UNKNOWN_' ? '(blank)' : l;
+function intakeCounts() { return countBy(parseCSV(prepared), 'intake_type'); }
+function buildIntakes() {
+  const counts = intakeCounts();
+  counts.forEach(([label], k) => {
+    if (label in intakeChoice) return;
+    const group = counts.length <= INTAKE_CAP || k < INTAKE_CAP - 1 ? label : 'OTHER';
+    intakeChoice[label] = { group, leaveOut: false };
+  });
+  const t = $('intake-table');
+  t.innerHTML = '<thead><tr><th>Intake label</th><th class="num">Stays</th><th>Group</th><th>Leave out</th></tr></thead>';
+  const body = document.createElement('tbody');
+  counts.forEach(([label, n], k) => {
+    const c = intakeChoice[label];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${esc(shownLabel(label))}</td><td class="num">${n.toLocaleString()}</td>` +
+      `<td><input type="text" id="intake-group-${k}" list="intake-groups" value="${esc(c.group)}" aria-label="Group for ${esc(shownLabel(label))}"></td>` +
+      `<td><input type="checkbox" id="intake-out-${k}" ${c.leaveOut ? 'checked' : ''} aria-label="Leave out ${esc(shownLabel(label))}"></td>`;
+    const g = tr.querySelector('input[type=text]'), o = tr.querySelector('input[type=checkbox]');
+    g.disabled = c.leaveOut;
+    g.oninput = () => { c.group = g.value.trim(); intakeCheck(); };
+    o.onchange = () => { c.leaveOut = o.checked; g.disabled = o.checked; intakeCheck(); };
+    body.append(tr);
+  });
+  t.append(body);
+  intakeCheck();
+}
+function intakeGroups() {
+  const sums = {};
+  for (const [label, n] of intakeCounts()) {
+    const c = intakeChoice[label];
+    if (!c.leaveOut) sums[c.group] = (sums[c.group] || 0) + n;
+  }
+  return Object.entries(sums).sort((a, b) => b[1] - a[1]);
+}
+function intakeCheck() {
+  const groups = intakeGroups(), names = groups.map(g => g[0]);
+  const problems = [];
+  const counts = intakeCounts();
+  const unnamed = counts.filter(([l]) => !intakeChoice[l].leaveOut && !intakeChoice[l].group);
+  if (unnamed.length) problems.push('give a group name to ' + unnamed.map(([l]) => shownLabel(l)).join(', '));
+  if (names.some(n => /[,=]/.test(n))) problems.push('a group name cannot contain a comma or an equals sign');
+  if (!groups.length) problems.push('keep at least one intake label');
+  if (groups.length > INTAKE_CAP) problems.push(`combine the ${groups.length} groups into at most ${INTAKE_CAP}`);
+  const clash = counts.filter(([l]) => intakeChoice[l].leaveOut && names.includes(l));
+  if (clash.length) problems.push(clash.map(([l]) => `${shownLabel(l)} is left out but is also the name of a kept group; rename that group`).join('; '));
+  $('intake-groups').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+  const note = $('intake-note');
+  note.className = problems.length ? 'status warn' : 'status';
+  note.textContent = problems.length ? 'Before running: ' + problems.join('; ') + '.' :
+    'Groups: ' + groups.map(([g, n]) => `${g} (${n.toLocaleString()})`).join(', ') + '.';
+  return problems;
+}
+function intakesYaml() {
+  const counts = intakeCounts();
+  const pairs = counts.filter(([l]) => !intakeChoice[l].leaveOut && intakeChoice[l].group !== l)
+                      .map(([l]) => `  - ${JSON.stringify(l)}: ${JSON.stringify(intakeChoice[l].group)}`);
+  const pass = intakeGroups().map(([g]) => `  - ${JSON.stringify(g)}`);
+  return (pairs.length ? 'intake_type_map:\n' + pairs.join('\n') + '\n' : '') + 'intake_filter_pass:\n' + pass.join('\n');
+}
+
 // ---------- step 7: periods ----------
 const addDay = (iso, n) => { const t = new Date(iso + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 const labelEdited = {};
@@ -638,20 +697,20 @@ function periodsYaml() {
 }
 
 // ---------- step 7: run mLOS ----------
-const CAPS = { intake_type: 6, group: 6 };
+const GROUP_CAP = 6;
 let runNo = 0;
 $('run-btn').onclick = async () => {
   const st = $('s6-status');
   const group = $('group-by').value;
   $('run-results').replaceChildren();
   const rowsP = parseCSV(prepared);
-  const groupLevels = countBy(rowsP, group), intakeLevels = countBy(rowsP, 'intake_type');
+  const groupLevels = countBy(rowsP, group);
   if (outcomeCheck().length) { st.className = 'status bad'; st.textContent = 'Classify every outcome label first.'; return; }
+  if (intakeCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the intake groups first.'; return; }
   if (periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
-  if (groupLevels.length > CAPS.group || intakeLevels.length > CAPS.intake_type) {
-    const [col, lv] = groupLevels.length > CAPS.group ? [group, groupLevels] : ['intake_type', intakeLevels];
+  if (groupLevels.length > GROUP_CAP) {
     st.className = 'status bad';
-    st.textContent = `This tool compares at most 6 groups, and ${col} has ${lv.length}: ${lv.map(x => x[0]).join(', ')}. Merge some of them, or compare by a different column.`;
+    st.textContent = `This tool compares at most ${GROUP_CAP} groups, and ${group} has ${groupLevels.length}: ${groupLevels.map(x => x[0]).join(', ')}. Merge some of them, or compare by a different column.`;
     window.demo.capRefusal = st.textContent;
     return;
   }
@@ -661,7 +720,7 @@ $('run-btn').onclick = async () => {
   st.textContent = 'Running mLOS (keep this tab in front)...';
   const out = '/out_' + (++runNo);
   const template = await (await fetch('mlos_settings_template.yaml')).text();
-  const settingsText = template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml());
+  const settingsText = template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml());
   window.demo.settingsYaml = settingsText;
   await webR.FS.writeFile('/mlos/settings.yaml', new TextEncoder().encode(settingsText));
   await webR.FS.writeFile('/mlos/prepared.csv', new TextEncoder().encode(prepared));

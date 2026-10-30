@@ -1,5 +1,6 @@
 __PERIODS__
 __OUTCOMES__
+__INTAKES__
 restricted_stay_cap: 365
 plot_stay_cap: 58
 probability_mass_width: 5
@@ -11,7 +12,6 @@ aj_conditional_ci: false
 show_km_ci_ribbons: true
 animal_group_columns:
   - __GROUP__
-intake_type_reference: STRAY
 period_reference: OLDEST
 discard_bad_rows: false
 discard_overlapping_rows: true
