@@ -9,7 +9,7 @@ it is fetched, and a download that does not match stops the build.
 # github.com/Shelter-Data-Analysis. A release replaces each commit with the
 # release's tag. The mLOS commit supplies both the R analysis and the deck
 # builder, mlos_review.
-MLOS_REF = "4a6fdb51320ced17855378242df52dcb1310eb93"
+MLOS_REF = "dc8ec2de616a4fccb7a4b893428276c02c2eeb7d"
 SDP_REF = "9daa223235c81b0b7c50ba7c7f1aa64a41a1989c"
 
 # webR, the build of R for WebAssembly, from its npm package. Its R version

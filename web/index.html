@@ -968,8 +968,7 @@ import json, shutil, time
 from pathlib import Path
 import pandas as pd
 from mlos_review import deck, workbook
-from mlos_review.blocks import header_text, cell_format
-from mlos_review.render_pptx import _format_cell
+from mlos_review.blocks import header_text, cell_format, format_value, rounds_to_zero
 
 shutil.rmtree('/deck', ignore_errors=True)
 Path('/deck').mkdir()
@@ -988,12 +987,9 @@ except Exception as e:
     built = 'tables'
 seconds = time.time() - t0
 
-bundle = deck.Bundle.load('/results')
-settings = deck.resolved_settings(bundle, deck.Settings())
-vocab = deck.Vocabulary(bundle.data)
-readings = deck.curve_readings_table(bundle, settings.curve_readings, vocab)
+sheets, vocab = deck.workbook_sheets('/results')
 tables = []
-for sheet in workbook.sheets(bundle, vocab, readings):
+for sheet in sheets:
     for k, table in enumerate(sheet.tables):
         frame = table.df
         rows = []
@@ -1010,14 +1006,14 @@ for sheet in workbook.sheets(bundle, vocab, readings):
                 spec = cell_format(table, key, measure)
                 # As the workbook does: a value its format would show as zero
                 # (a p-value of 3.7e-06 under four decimals) is shown in full.
-                if isinstance(value, (int, float)) and workbook._rounds_to_zero(float(value), spec):
+                if isinstance(value, (int, float)) and rounds_to_zero(float(value), spec):
                     text = '{0:.3g}'.format(float(value))
                 else:
-                    text = _format_cell(value, spec)
+                    text = format_value(value, spec)
                 cells.append([text, str(flag)])
             rows.append([[str(p) for p in parts], cells])
         tables.append({'sheet': sheet.name, 'index': k, 'title': deck.capitalize_first(table.title),
-                       'index_headers': workbook._index_headers(frame),
+                       'index_headers': workbook.index_headers(frame),
                        'headers': [header_text(table, vocab, m, short=False) for m in frame.columns],
                        'rows': rows, 'notes': list(table.footnotes)})
 json.dumps({'built': built, 'error': error, 'seconds': seconds,
