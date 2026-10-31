@@ -57,11 +57,15 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
   <section id="s1">
     <span class="step">Step 1</span>
     <h2>Load the export</h2>
-    <p class="help">A CSV file exported from the shelter's software, one row per stay. The demo file is the Mission Viejo Animal Services export (dogs and cats, 2016 to 2025).</p>
+    <p class="help">A CSV file or an Excel workbook (.xlsx or .xlsm) exported from the shelter's software, one row per stay, with the column names in the first row. The demo file is the Mission Viejo Animal Services export (dogs and cats, 2016 to 2025).</p>
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
       <button id="load-demo">Use the Mission Viejo export</button>
-      <label class="help">or choose a file: <input type="file" id="file-input" accept=".csv,.gz"></label>
+      <label class="help">or choose a file: <input type="file" id="file-input" accept=".csv,.gz,.xlsx,.xlsm"></label>
     </div>
+    <div class="grid2" id="sheet-row" hidden>
+      <label for="sheet-sel">Sheet</label><select id="sheet-sel"></select>
+    </div>
+    <p class="status" id="sheet-note"></p>
     <p class="status" id="s1-status"></p>
     <div class="scroll" id="preview"></div>
     <details id="files-box"><summary>Already have a ShelterDataPrep configuration or an mLOS settings file?</summary>
@@ -251,7 +255,14 @@ Promise.all([pyReady, rReady]).then(() => {
 }, (e) => { $('runtime-status').textContent = 'Could not start: ' + e; window.demo.errors.push(String(e)); });
 
 // ---------- step 1: load ----------
-let exportName = '', exportText = '', header = [], rows = [];
+// exportSource is the file ShelterDataPrep reads in place of the export: its
+// name in Python's file system, its contents, and for a workbook the sheet.
+let exportName = '', exportSource = null, header = [], rows = [];
+const exportKey = () => exportName + '|' + (exportSource ? exportSource.sheet || '' : '') + '|' + rows.length;
+function writeExport(py) {
+  py.FS.mkdirTree('/work/out');
+  py.FS.writeFile('/work/' + exportSource.file, exportSource.data);
+}
 
 function parseCSV(text, limit = Infinity) {
   const out = []; let row = [], field = '', q = false, i = 0;
@@ -269,11 +280,29 @@ function parseCSV(text, limit = Infinity) {
 }
 
 function loadText(name, text) {
-  exportName = name; exportText = text;
   const all = parseCSV(text);
-  header = all[0].map(h => h.trim());
-  rows = all.slice(1).filter(r => r.length > 1);
-  $('s1-status').textContent = `${name}: ${rows.length.toLocaleString()} rows, ${header.length} columns. First five rows:`;
+  $('sheet-row').hidden = true; $('sheet-note').textContent = '';
+  loadTable(name, { file: 'export.csv', data: text, sheet: null }, all[0].map(h => h.trim()), all.slice(1).filter(r => r.length > 1));
+}
+// A column with no name and no values, such as a spacer between columns, is
+// left off the page. ShelterDataPrep reads only the columns its configuration
+// names, so it never reads one either. pandas names such a column "Unnamed: 3".
+const blankName = (h) => !h || /^Unnamed: \d+$/.test(h);
+function loadTable(name, source, head, body) {
+  forgetPrepared('A different export was loaded.');
+  const keep = head.map((h, i) => i).filter(i => !blankName(head[i]) || body.some(r => (r[i] || '').trim()));
+  const dropped = head.length - keep.length;
+  // A row with no values, such as a spacer row, is left off the page too.
+  // ShelterDataPrep reads it as a stay with no dates, and its study-window
+  // step removes it.
+  const filled = body.filter(r => r.some(v => (v || '').trim()));
+  const blankRows = body.length - filled.length;
+  exportName = name; exportSource = source;
+  header = keep.map(i => head[i]); rows = dropped ? filled.map(r => keep.map(i => r[i] ?? '')) : filled;
+  const left = [dropped ? `${dropped} empty column${dropped === 1 ? '' : 's'}, with no name and no values` : '',
+                blankRows ? `${blankRows.toLocaleString()} empty row${blankRows === 1 ? '' : 's'}` : ''].filter(Boolean);
+  $('s1-status').textContent = `${name}${source.sheet ? ', sheet ' + source.sheet : ''}: ${rows.length.toLocaleString()} row${rows.length === 1 ? '' : 's'}, ${header.length} column${header.length === 1 ? '' : 's'}` +
+    (left.length ? ` (${left.join('; ')}, left out)` : '') + '. First five rows:';
   $('s1-status').className = 'status ok';
   const t = document.createElement('table');
   t.innerHTML = '<thead><tr>' + header.map(h => `<th>${esc(h)}</th>`).join('') + '</tr></thead><tbody>' +
@@ -300,10 +329,116 @@ $('load-demo').onclick = async () => loadText('mission_viejo_export.csv', await 
 $('file-input').onchange = async (e) => {
   const f = e.target.files[0];
   if (!f) return;
+  const lower = f.name.toLowerCase();
+  if (/\.xls[xm]$/.test(lower)) return loadWorkbook(f);
+  if (lower.endsWith('.xls')) {
+    $('s1-status').className = 'status bad';
+    $('s1-status').textContent = `${f.name} is in the Excel 97-2003 format, which this page cannot read. Save it from Excel as an .xlsx workbook or as a CSV file, and load that.`;
+    return;
+  }
   // A .gz export, as the Zenodo deposits hold them, is read uncompressed.
-  const text = f.name.toLowerCase().endsWith('.gz') ? await new Response(f.stream().pipeThrough(new DecompressionStream('gzip'))).text() : await f.text();
+  const text = lower.endsWith('.gz') ? await new Response(f.stream().pipeThrough(new DecompressionStream('gzip'))).text() : await f.text();
   loadText(f.name, text);
 };
+
+// ---------- step 1: workbooks ----------
+// A workbook is read by pandas with openpyxl, as ShelterDataPrep reads one,
+// and every cell as text, so the forms see the values ShelterDataPrep will.
+// The workbook itself is what ShelterDataPrep reads, with a sheet: line.
+let workbook = null, excelReady = null;
+function loadExcelReader() {
+  if (!excelReady) excelReady = (async () => {
+    const py = await pyReady;
+    await py.loadPackage(['micropip']);
+    py.globals.set('wheel_urls', py.toPy(manifest.wheels.filter(w => /^(openpyxl|et_xmlfile)-/.test(w)).map(w => root + 'wheels/' + w)));
+    await py.runPythonAsync('import micropip\nawait micropip.install(list(wheel_urls), deps=False)');
+    return py;
+  })();
+  return excelReady;
+}
+// The sheet guessed to hold the stays: the one whose first row names the most
+// of the columns step 2 asks for, then the one with the most rows, then the
+// most columns (a workbook does not always record how many rows a sheet has). A sheet the
+// uploaded configuration names comes first.
+function guessSheet(sheets) {
+  const named = ownConfig && ownConfig.sheet && sheets.find(s => s.name === ownConfig.sheet);
+  if (named) return { sheet: named, why: `${ownConfig.name} names it` };
+  const score = (s) => FIELDS.filter(f => s.header.some(h => f.hints.includes(String(h).trim().toLowerCase()))).length;
+  const best = [...sheets].sort((a, b) => score(b) - score(a) || (b.rows || 0) - (a.rows || 0) || b.header.length - a.header.length)[0];
+  const n = score(best);
+  return { sheet: best, why: n ? `its first row names ${n} of the ${FIELDS.length} columns step 2 asks for` : 'it has the most rows or columns; no sheet names the columns step 2 asks for, so check that this is the right one' };
+}
+async function loadWorkbook(f) {
+  const st = $('s1-status');
+  st.className = 'status'; st.textContent = `Reading ${f.name}...`;
+  try {
+    const py = await loadExcelReader();
+    const data = new Uint8Array(await f.arrayBuffer());
+    py.FS.mkdirTree('/work');
+    py.FS.writeFile('/work/export.xlsx', data);
+    // Excel writes font families above 14, which openpyxl refuses as a broken
+    // style table. A font's family changes only how text is drawn, so the page
+    // drops those entries and reads, and has ShelterDataPrep read, that copy.
+    const info = JSON.parse(py.runPython(`
+import json, re, zipfile
+import pandas as pd
+def repair(path):
+    with zipfile.ZipFile(path) as z:
+        parts = [(i, z.read(i.filename)) for i in z.infolist()]
+    dropped = 0
+    with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as z:
+        for i, data in parts:
+            if i.filename == 'xl/styles.xml':
+                data, dropped = re.subn(rb'<family val="(1[5-9]|[2-9][0-9]|[0-9]{3,})"\\s*/>', b'', data)
+            z.writestr(i, data)
+    return dropped
+try:
+    book, repaired = pd.ExcelFile('/work/export.xlsx'), 0
+except ValueError as e:
+    if 'stylesheet' not in str(e) or not (repaired := repair('/work/export.xlsx')):
+        raise
+    book = pd.ExcelFile('/work/export.xlsx')
+json.dumps({'repaired': repaired, 'sheets': [{'name': name, 'header': [str(h) for h in pd.read_excel(book, sheet_name=name, nrows=0).columns],
+             'rows': None if book.book[name].max_row is None else max(book.book[name].max_row - 1, 0)}
+            for name in book.sheet_names]})`));
+    const sheets = info.sheets;
+    workbook = { name: f.name, data: info.repaired ? py.FS.readFile('/work/export.xlsx') : data, sheets,
+                 repair: info.repaired ? `openpyxl, which reads workbooks for pandas and ShelterDataPrep, cannot read ${f.name} as saved: its fonts name a font family above 14. The page read a copy without those ${info.repaired} font settings, which change how text is drawn and no cell value. On your own computer, ShelterDataPrep stops on the original with "could not read stylesheet".` : '' };
+    const sel = $('sheet-sel');
+    sel.innerHTML = sheets.map((s, k) => `<option value="${k}">${esc(s.name)} (${s.rows === null ? '' : `about ${s.rows.toLocaleString()} rows, `}${s.header.length} column${s.header.length === 1 ? '' : 's'})</option>`).join('');
+    sel.onchange = () => readSheet(sheets[+sel.value]);
+    $('sheet-row').hidden = sheets.length < 2;
+    const { sheet, why } = guessSheet(sheets);
+    sel.value = String(sheets.indexOf(sheet));
+    $('sheet-note').className = workbook.repair ? 'status warn' : 'status';
+    $('sheet-note').textContent = [workbook.repair, sheets.length < 2 ? '' : `${f.name} has ${sheets.length} sheets. Reading ${sheet.name}, since ${why}. Choose another above if the stays are elsewhere.`].filter(Boolean).join(' ');
+    await readSheet(sheet);
+  } catch (err) {
+    st.className = 'status bad';
+    st.textContent = `${f.name} cannot be read as a workbook: ${pyError(err)}`;
+    window.demo.errors.push(String(err));
+  }
+}
+async function readSheet(sheet) {
+  const py = await loadExcelReader(), st = $('s1-status');
+  st.className = 'status'; st.textContent = `Reading sheet ${sheet.name}...`;
+  py.globals.set('sheet_name', sheet.name);
+  // ShelterDataPrep takes the column names from the first row, so a sheet
+  // whose first row is blank is reported rather than read with no names.
+  const t = JSON.parse(py.runPython(`
+frame = pd.read_excel('/work/export.xlsx', sheet_name=sheet_name, dtype=str).fillna('')
+top = pd.read_excel('/work/export.xlsx', sheet_name=sheet_name, header=None, nrows=10, dtype=str).notna().any(axis=1)
+json.dumps({'header': [str(h) for h in frame.columns], 'rows': frame.values.tolist(),
+            'name_row': int(top.values.argmax()) + 1 if top.any() else None})`));
+  if (!t.header.length || t.name_row === null) { st.className = 'status bad'; st.textContent = `Sheet ${sheet.name} is empty. Choose another.`; return; }
+  if (t.name_row > 1) {
+    st.className = 'status bad';
+    st.textContent = `Sheet ${sheet.name} starts in row ${t.name_row}, and ShelterDataPrep reads the column names from row 1. In Excel, delete the rows above the column names, save, and load the workbook again.`;
+    $('preview').replaceChildren();
+    return;
+  }
+  loadTable(workbook.name, { file: 'export.xlsx', data: workbook.data, sheet: sheet.name }, t.header.map(h => h.trim()), t.rows);
+}
 
 // ---------- files from earlier runs ----------
 // An uploaded ShelterDataPrep configuration stands in for steps 2 to 6, and an
@@ -341,7 +476,7 @@ function applyFiles(rebuildDates = false) {
   $('cfg-panel').hidden = !ownConfig;
   if (ownConfig) {
     $('cfg-panel-note').textContent = `Steps 2 to 6 are skipped: the data is prepared with ${ownConfig.name}, as written, except:`;
-    $('cfg-changes').innerHTML = ownConfig.changes.map(c => `<li>${esc(c)}</li>`).join('');
+    $('cfg-changes').innerHTML = [sourceChange(), ...ownConfig.changes].map(c => `<li>${esc(c)}</li>`).join('');
   }
   $('set-panel').hidden = !ownSettings;
   $('s6-forms').style.display = ownSettings ? 'none' : 'flex';
@@ -354,6 +489,13 @@ function applyFiles(rebuildDates = false) {
   $('config-yaml').textContent = ownConfig ? ownConfig.text : (header.length ? configYaml() : '');
   refresh(rebuildDates);
   configFacts();
+}
+// What an uploaded configuration reads in place of the file it names.
+function sourceChange() {
+  const theirs = ownConfig.source + (ownConfig.sheet ? `, sheet ${ownConfig.sheet}` : '');
+  if (!exportSource) return `It reads the export loaded in step 1 in place of ${theirs}.`;
+  const ours = exportSource.sheet ? `sheet ${exportSource.sheet} of ${exportName}` : `${exportName}, a CSV file`;
+  return `It reads ${ours} in place of ${theirs}.`;
 }
 // The page's own files end with its form answers, so loading one back fills
 // in the forms. A checksum of the rest of the file says whether it was edited
@@ -432,12 +574,13 @@ function restoreSettings(a) {
 // the file's own columns and date format, so the window checks see what the
 // preparation will.
 async function configFacts() {
-  const cfg = ownConfig, key = exportName + '|' + rows.length;
+  const cfg = ownConfig, key = exportKey();
   if (!cfg || !header.length || cfg.factsKey === key) return;
   cfg.factsKey = key;
   const py = await pyReady;
-  py.FS.mkdirTree('/work/out');
-  py.FS.writeFile('/work/export.csv', exportText);
+  writeExport(py);
+  py.globals.set('export_file', exportSource.file);
+  py.globals.set('export_sheet', exportSource.sheet);
   try {
     const facts = JSON.parse(py.runPython(`
 import json
@@ -445,7 +588,7 @@ from dataclasses import replace
 from pathlib import Path
 import pandas as pd
 from shelterprep import load, Prep
-s = replace(load('/work/upload_config.yaml'), source_dir=Path('/work'), source_file='export.csv', sheet=None,
+s = replace(load('/work/upload_config.yaml'), source_dir=Path('/work'), source_file=export_file, sheet=export_sheet,
             dest_dir=Path('/work/out'), dest_file='prepared.csv')
 frame = Prep(s).read().frame
 today = pd.Timestamp('${todayIso()}')
@@ -506,8 +649,7 @@ json.dumps({'start': None if s.window_start_date is None else str(s.window_start
     if (!info.start) throw new Error('it sets no study window (window_start_date and window_stop_date), which the periods in step 8 are drawn from');
     $('win-start').value = info.start;
     $('win-end').value = info.stop;
-    ownConfig = { name: f.name, text, changes: [
-      `It reads the export loaded in step 1 in place of ${info.source}` + (info.sheet ? `, as a CSV file rather than sheet ${info.sheet} of a workbook.` : '.'),
+    ownConfig = { name: f.name, text, source: info.source, sheet: info.sheet, changes: [
       'It writes the prepared data inside this page, not to its dest_dir.',
       'The page cannot check that it studies one species: its own steps have to remove the others, as step 3 does.',
     ] };
@@ -800,11 +942,11 @@ function configBody() {
   const m = mapping();
   const ages = ageGroups();
   const cols = FIELDS.filter(f => m[f.key]).map(f => `  ${f.key}: ${JSON.stringify(m[f.key])}`).join('\n');
-  return `# Written by mLOS Web from steps 2 to 6. source_dir and dest_dir are the
-# page's own folders; change them to run this file on your computer.
+  return `# Written by mLOS Web from steps 2 to 6. source_dir, source_file, and
+# dest_dir name the page's own files; change them to run this file on your computer.
 source_dir:  "/work"
-source_file: "export.csv"
-date_format: ${JSON.stringify(dateFormat)}
+source_file: ${JSON.stringify(exportSource.file)}
+${exportSource.sheet === null ? '' : `sheet:       ${JSON.stringify(exportSource.sheet)}\n`}date_format: ${JSON.stringify(dateFormat)}
 dest_dir:    "/work/out"
 dest_file:   "prepared.csv"
 output_columns: [animal_id, intake_date, outcome_date, outcome_type, intake_type, animal_size, age_group]
@@ -835,7 +977,7 @@ function isoOf(v) {
 const todayIso = () => { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; };
 let factsCache = { key: null, facts: null };
 function formFacts() {
-  const m = mapping(), key = [exportName, rows.length, m.intake_date, m.outcome_date, m.dob, dateFormat].join('|');
+  const m = mapping(), key = [exportKey(), m.intake_date, m.outcome_date, m.dob, dateFormat].join('|');
   if (factsCache.key === key) return factsCache.facts;
   const today = todayIso(), facts = {};
   for (const col of ['intake_date', 'outcome_date', 'dob']) {
@@ -947,8 +1089,9 @@ $('prep-btn').onclick = async () => {
   st.textContent = 'Preparing...';
   const t0 = performance.now();
   try {
-    py.FS.mkdirTree('/work/out');
-    py.FS.writeFile('/work/export.csv', exportText);
+    writeExport(py);
+    py.globals.set('export_file', exportSource.file);
+    py.globals.set('export_sheet', exportSource.sheet);
     preparedConfig = ownConfig ? ownConfig.text : configYaml();
     py.FS.writeFile('/work/config.yaml', preparedConfig);
     // An uploaded configuration reads the export loaded in step 1 and writes
@@ -960,7 +1103,7 @@ from pathlib import Path
 from shelterprep import load, Prep
 settings = load('/work/config.yaml')
 if ${ownConfig ? 'True' : 'False'}:
-    settings = replace(settings, source_dir=Path('/work'), source_file='export.csv', sheet=None,
+    settings = replace(settings, source_dir=Path('/work'), source_file=export_file, sheet=export_sheet,
                        dest_dir=Path('/work/out'), dest_file='prepared.csv')
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf):
