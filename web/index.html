@@ -636,7 +636,11 @@ for column in ('intake_date', 'outcome_date', 'dob'):
         facts[column] = {'first': iso(v.iloc[0]) if len(v) else None,
                          'last_real': iso(real.iloc[-1]) if len(real) else None,
                          'future': [iso(t) for t in v[v > today]]}
+if 'intake_date' in frame and 'outcome_date' in frame:
+    facts['pairs'] = [[None if pd.isna(i) else iso(i), None if pd.isna(o) else iso(o)]
+                      for i, o in zip(frame['intake_date'], frame['outcome_date'])]
 json.dumps(facts)`));
+    if (facts.pairs) { facts.shape = cutShape(facts.pairs, todayIso()); delete facts.pairs; }
     if (ownConfig === cfg) { cfg.facts = facts; windowNote(); }
   } catch (err) {
     if (ownConfig === cfg) { $('cfg-window-note').className = 'status bad'; $('cfg-window-note').textContent = 'ShelterDataPrep could not read the export with this configuration: ' + pyError(err); }
@@ -1010,10 +1014,12 @@ function isoOf(v) {
   let y = +x[f.order[0]]; if (y < 100) y += 2000;
   return `${y}-${String(+x[f.order[1]]).padStart(2, '0')}-${String(+x[f.order[2]]).padStart(2, '0')}`;
 }
-// The export's date range, as the window checks need it: the first intake,
-// and for each date column its last date up to today and the dates after
-// today. Read here with the format chosen in step 4, or for an uploaded
-// configuration by ShelterDataPrep's own reader (configFacts).
+// The export's date range, as the window checks need it: for each date column
+// its first date, its last date up to today, and the dates after today; and,
+// to guess how the export was cut (cutGuess), the intakes before the first
+// outcome and in the year after it, and the stays with no outcome date. Read
+// here with the format chosen in step 4, or for an uploaded configuration by
+// ShelterDataPrep's own reader (configFacts).
 const todayIso = () => { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; };
 let factsCache = { key: null, facts: null };
 function formFacts() {
@@ -1027,6 +1033,9 @@ function formFacts() {
     const real = d.filter(x => x <= today);
     facts[col] = { first: d[0] || null, last_real: real.length ? real[real.length - 1] : null, future: d.filter(x => x > today) };
   }
+  const ii = header.indexOf(m.intake_date), oi = header.indexOf(m.outcome_date);
+  if (ii >= 0 && oi >= 0)
+    facts.shape = cutShape(rows.map(r => [isoOf(r[ii]), (r[oi] || '').trim() ? isoOf(r[oi]) || '?' : null]), today);
   factsCache = { key, facts };
   return facts;
 }
@@ -1038,8 +1047,70 @@ function stopLimit(facts) {
   const ends = ['intake_date', 'outcome_date'].map(c => facts[c] && facts[c].last_real).filter(Boolean).sort();
   return ends.length ? { last: ends[0], which: facts.outcome_date && facts.outcome_date.last_real === ends[0] ? 'outcome' : 'intake', stop: addDay(ends[0], 1) } : null;
 }
+// The dates that say how the export was cut, from each stay's intake and
+// outcome dates (null for no outcome date, '?' for one that does not read).
+// An outcome before its own intake, or after today, is an error and is left
+// out. EDGE counts each series over its first days; RATE is its count per as
+// many days between the later first date and the earlier last one, less EDGE
+// at each end, where both series run at their usual pace.
+const EDGE = 30;
+function cutShape(pairs, today) {
+  const ins = [], outs = [];
+  let open = 0;
+  for (const [i, o] of pairs) {
+    if (!i || i > today) continue;
+    ins.push(i);
+    if (o === null) open++;
+    else if (o !== '?' && o >= i && o <= today) outs.push(o);
+  }
+  if (!ins.length || !outs.length) return null;
+  ins.sort(); outs.sort();
+  const a = ins[0], b = outs[0], lastIn = ins[ins.length - 1], lastOut = outs[outs.length - 1];
+  const within = (v, x, y) => v.filter(d => d >= x && d < y).length;
+  const lo = addDay(a > b ? a : b, EDGE), hi = addDay(lastIn < lastOut ? lastIn : lastOut, -EDGE);
+  const days = (Date.parse(hi) - Date.parse(lo)) / 864e5;
+  return { a, b, lastOut, stays: ins.length, open, before: ins.filter(d => d < b).length,
+           span: Math.round((Date.parse(b) - Date.parse(a)) / 864e5),
+           inEdge: within(ins, a, addDay(a, EDGE)), outEdge: within(outs, b, addDay(b, EDGE)),
+           inRate: days >= 90 ? within(ins, lo, hi) * EDGE / days : null,
+           outRate: days >= 90 ? within(outs, lo, hi) * EDGE / days : null };
+}
+// How the export seems to have been cut. At its start, a cut by intake date
+// makes the intakes begin at their usual pace while the outcomes build up from
+// nothing, and a cut by outcome date the reverse: the outcomes begin at their
+// usual pace, and the intakes before them are the few long stays still in
+// care on that day. An export holding its whole history starts as a cut by
+// intake date does. At its end, a cut by outcome date leaves no animal still
+// in care, so the guess is that cut when no more than one stay in a thousand
+// lacks an outcome date. A cut by both dates shows as intake at the start and
+// outcome at the end.
+function cutGuess(facts) {
+  const sh = facts.shape;
+  if (!sh) return null;
+  const inPace = sh.inRate ? sh.inEdge / sh.inRate : 1, outPace = sh.outRate ? sh.outEdge / sh.outRate : 0;
+  return { ...sh, inPace, outPace, start: inPace < 0.5 * outPace ? 'outcome' : 'intake',
+           end: sh.open <= sh.stays / 1000 ? 'outcome' : 'intake' };
+}
+function guessText(g) {
+  const kind = g.start === 'outcome' && g.end === 'outcome' ? 'cut by outcome date: it seems to hold only the animals that left between its first and last outcomes'
+    : g.end === 'outcome' ? 'cut by both intake and outcome date: it seems to hold only the animals admitted in its date range that also left in it'
+    : g.start === 'outcome' ? 'cut by outcome date at its start: it seems to hold the animals that left on or after its first outcome, and those still in care'
+    : 'cut by intake date, or not cut: it seems to hold every animal admitted in its date range, including those still in care';
+  const share = (x) => `${Math.round(100 * x)}%`;
+  const start = `In its first ${EDGE} days it has ${g.inEdge.toLocaleString()} intake${g.inEdge === 1 ? '' : 's'} from ${g.a}, ${share(g.inPace)} of its usual pace, and ${g.outEdge.toLocaleString()} outcome${g.outEdge === 1 ? '' : 's'} from ${g.b}, ${share(g.outPace)} of theirs`;
+  const end = g.open ? `${g.open.toLocaleString()} stay${g.open === 1 ? '' : 's'} with no outcome date` : 'no stay without an outcome date';
+  return `The export looks ${kind}. ${start}; it has ${end}.` + (ownConfig ? '' : ' The default window assumes this.');
+}
 // The analysis follows a stay up to the cap, so an export cut by intake date
 // misses nothing once the window starts a cap's length after its first intake.
+// One cut by outcome date misses nothing from its first outcome on, since every
+// animal in care on a day leaves after it. At the end, a cut by outcome date
+// drops the animals still in care; stopping a cap's length before the day
+// after the last outcome leaves only stays longer than the cap missing.
+function outcomeStop(facts) {
+  const last = facts.shape && facts.shape.lastOut, cap = capValue();
+  return last && cap ? addDay(last, 1 - cap) : null;
+}
 function windowLead(facts) {
   const first = facts.intake_date && facts.intake_date.first, cap = capValue();
   if (!first || !cap) return null;
@@ -1048,16 +1119,19 @@ function windowLead(facts) {
 }
 const firstOfMonthOnOrAfter = (iso) => iso.slice(8) === '01' ? iso : addDay(iso.slice(0, 7) + '-01', 31).slice(0, 7) + '-01';
 const firstOfMonthOnOrBefore = (iso) => iso.slice(0, 7) + '-01';
-// Defaults drawn from the export: the window starts a cap's length after the
-// first intake and stops at a month start the records reach, and the dividing
-// dates split it into about four periods at New Year.
+// Defaults drawn from the export and the cut it seems to have (cutGuess): the
+// window starts a cap's length after the first intake, or at the first outcome
+// for a cut by outcome date, and stops at a month start the records reach, a
+// cap's length before the last outcome for a cut by outcome date at the end.
+// The dividing dates split it into about four periods at New Year.
 let windowEdited = false;
 function defaultWindow() {
   const facts = formFacts(), limit = stopLimit(facts), first = facts.intake_date && facts.intake_date.first;
   if (windowEdited || !first || !limit) return;
-  const stop = firstOfMonthOnOrBefore(limit.stop);
-  let start = firstOfMonthOnOrAfter(addDay(first, capValue() || 365));
-  if (start >= stop) start = firstOfMonthOnOrAfter(first);
+  const guess = cutGuess(facts), early = guess && guess.end === 'outcome' && outcomeStop(facts);
+  let stop = firstOfMonthOnOrBefore(early && early < limit.stop ? early : limit.stop);
+  let start = firstOfMonthOnOrAfter(guess && guess.start === 'outcome' ? guess.b : addDay(first, capValue() || 365));
+  if (start >= stop) { stop = firstOfMonthOnOrBefore(limit.stop); start = firstOfMonthOnOrAfter(first); }
   $('win-start').value = start;
   $('win-end').value = stop;
   const t0 = Date.parse(start), span = Date.parse(stop) - t0;
@@ -1078,8 +1152,17 @@ function windowNote() {
     if (future.length) warnings.push(`Dates after today, which are errors in the export: ${future.join('; ')}. These checks leave them out.`);
     const limit = stopLimit(facts);
     if (limit && e > limit.stop) problems.push(`The stop date can be no later than ${limit.stop}, the day after the export's last ${limit.which} (${limit.last}): after that the export records no ${limit.which === 'outcome' ? 'exits, so the animals in care would look as if none ever left' : 'intakes'}. A few days earlier still leaves room for outcomes recorded late.`);
-    const lead = windowLead(facts);
-    if (lead && lead.days < lead.cap) warnings.push(`The window starts ${lead.days} days after the export's first intake, fewer than the ${lead.cap}-day horizon ${ownSettings ? 'in ' + ownSettings.name : 'set in step 8'}. If the export holds only animals admitted from ${lead.first} on, animals admitted earlier and still in care on ${s} are missing; the results after the run estimate how many. Starting on or after ${lead.safeStart} avoids the question.`);
+    // One warning for each cut the dates leave possible, each saying what that
+    // cut would miss and the window that avoids it.
+    const guess = cutGuess(facts);
+    if (guess) lines.push(guessText(guess));
+    const lead = windowLead(facts), fo = guess && guess.b;
+    const byIntake = lead && lead.days < lead.cap, byOutcome = fo && s < fo;
+    if (byIntake) warnings.push(`The window starts ${lead.days} days after the export's first intake, fewer than the ${lead.cap}-day horizon ${ownSettings ? 'in ' + ownSettings.name : 'set in step 8'}. If the export is ${guess && guess.start === 'outcome' ? 'also ' : ''}cut by intake date, holding only animals admitted from ${lead.first} on, animals admitted earlier and still in care on ${s} are missing; the results after the run estimate how many. Starting on or after ${lead.safeStart} avoids the question.`);
+    if (byOutcome) warnings.push(`The export records no outcome before ${fo}, after the window's first day. If it is cut by outcome date, holding only animals that left on or after ${fo}, the animals that left between ${s} and then are missing, and the window's first periods hold only the longer stays. Starting on or after ${fo} avoids the question.`);
+    if (byIntake && byOutcome) warnings.push(`If it is cut by both, start on or after the later of the two, ${lead.safeStart > fo ? lead.safeStart : fo}.`);
+    const os = outcomeStop(facts);
+    if (guess && guess.end === 'outcome' && os && e > os) warnings.push(`No more than one stay in a thousand in the export lacks an outcome date, so it seems to hold no animal still in care. If it is cut by outcome date, holding only animals that left by ${guess.lastOut}, the animals in care on that day are missing, and stays that begin near the stop date look shorter than they were. A stop date on or before ${os}, ${capValue()} days before the day after the last outcome, leaves only stays longer than the horizon missing.`);
     if (!ownConfig) {
       const i = header.indexOf(mapping().intake_date);
       const after = rows.map(r => isoOf(r[i])).filter(x => x && x >= e).length;
@@ -1597,7 +1680,7 @@ async function runChecks(out, cap, lead) {
   if (lead && lead.days < lead.cap) {
     const tenure = parseCSV(new TextDecoder().decode(await webR.FS.readFile(out + '/km_in_care_tenure_unified.csv')));
     const at = tenure.slice(1).filter(r => /^\d+$/.test(r[0]) && +r[0] <= lead.days).pop();
-    if (at) items.push({ level: 'warn', text: `The window starts ${lead.days} days after the export's first intake. In a shelter in its usual state, ${pct(+at[1])} of the residents on any day have been in care longer than that, so if the export holds only animals admitted from ${lead.first} on, about that share of the residents on the window's first day are missing from it. A shelter emptied or newly opened just before the window loses less.` });
+    if (at) items.push({ level: 'warn', text: `The window starts ${lead.days} days after the export's first intake. In a shelter in its usual state, ${pct(+at[1])} of the residents on any day have been in care longer than that, so if the export is cut by intake date, holding only animals admitted from ${lead.first} on, about that share of the residents on the window's first day are missing from it. A shelter emptied or newly opened just before the window loses less.` });
   }
   const led = res.data_preparation.ledger.columns, j = led.name.indexOf('overlapping_stays');
   if (j >= 0 && led.rows_affected[j] > 0) items.push({ level: 'warn', text: `${led.rows_affected[j].toLocaleString()} stays overlapped another stay of the same animal; the shorter of each pair was dropped (discard_overlapping_rows).` });
