@@ -162,9 +162,9 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <p class="help">mLOS compares periods within the study window. Add up to three dividing dates to split it into as many as four periods, and name each one. Choose the dates before looking at the results: at real events where there are any (a new program, a policy change), otherwise at calendar years or half-years. Aim for at least 100 outcomes in each period.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
       <span class="help">Dividing dates (each starts a new period):</span>
-      <input type="date" id="div-0" value="2019-01-01" aria-label="Dividing date 1">
-      <input type="date" id="div-1" value="2021-01-01" aria-label="Dividing date 2">
-      <input type="date" id="div-2" value="2023-01-01" aria-label="Dividing date 3">
+      <input type="date" id="div-0" aria-label="Dividing date 1">
+      <input type="date" id="div-1" aria-label="Dividing date 2">
+      <input type="date" id="div-2" aria-label="Dividing date 3">
     </div>
     <div class="scroll"><table id="period-table"></table></div>
     <p class="status" id="period-note"></p>
@@ -313,6 +313,7 @@ function loadTable(name, source, head, body) {
   $('s5').classList.remove('locked');
   buildAges();
   windowEdited = false;
+  if (dividersSet === 'user') dividersSet = null;
   buildDates();
   defaultWindow();
   if (pendingConfigAnswers) {
@@ -596,6 +597,7 @@ function restoreSettings(a) {
   outcomeChoice = { ...a.outcomes };
   intakeChoice = JSON.parse(JSON.stringify(a.intakes));
   [0, 1, 2].forEach(k => $('div-' + k).value = a.dividers[k] || '');
+  dividersSet = 'file';
   pendingLabels = a.labels;
   wantGroup = a.group;
   $('cap').value = a.cap || 365;
@@ -1123,7 +1125,6 @@ const firstOfMonthOnOrBefore = (iso) => iso.slice(0, 7) + '-01';
 // window starts a cap's length after the first intake, or at the first outcome
 // for a cut by outcome date, and stops at a month start the records reach, a
 // cap's length before the last outcome for a cut by outcome date at the end.
-// The dividing dates split it into about four periods at New Year.
 let windowEdited = false;
 function defaultWindow() {
   const facts = formFacts(), limit = stopLimit(facts), first = facts.intake_date && facts.intake_date.first;
@@ -1134,8 +1135,17 @@ function defaultWindow() {
   if (start >= stop) { stop = firstOfMonthOnOrBefore(limit.stop); start = firstOfMonthOnOrAfter(first); }
   $('win-start').value = start;
   $('win-end').value = stop;
+}
+// The dividing dates follow the study window, from whatever set it, until the
+// user changes one ('user') or a settings file sets them ('file'): they split
+// the window into about four periods at New Year, and a window too short for
+// that is one period. A new export drops the user's dates, not a file's.
+let dividersSet = null;
+function windowDividers() {
+  if (dividersSet) return;
+  const start = $('win-start').value, stop = $('win-end').value;
   const t0 = Date.parse(start), span = Date.parse(stop) - t0;
-  const divs = [...new Set([1, 2, 3].map(k => `${new Date(t0 + span * k / 4 + 182.6 * 864e5).getUTCFullYear()}-01-01`))]
+  const divs = !(span > 0) ? [] : [...new Set([1, 2, 3].map(k => `${new Date(t0 + span * k / 4 + 182.6 * 864e5).getUTCFullYear()}-01-01`))]
     .filter(d => d > start && d < stop);
   [0, 1, 2].forEach(k => $('div-' + k).value = divs[k] || '');
 }
@@ -1195,6 +1205,7 @@ function nodateStep() {
 function refresh(rebuildDates = true) {
   if (!header.length) return;
   if (rebuildDates) buildDates();
+  windowDividers();
   windowNote();
   buildPeriods();
   if (!ownConfig) $('config-yaml').textContent = configYaml();
@@ -1500,7 +1511,7 @@ function periodCheck() {
   note.textContent = problems.length ? 'Fix before running: ' + problems.join('; ') + '.' : '';
   return problems;
 }
-['div-0', 'div-1', 'div-2'].forEach(id => $(id).addEventListener('change', () => refresh(false)));
+['div-0', 'div-1', 'div-2'].forEach(id => $(id).addEventListener('change', () => { dividersSet = 'user'; refresh(false); }));
 ['win-start', 'win-end'].forEach(id => $(id).addEventListener('change', () => {
   windowEdited = true;
   refresh(false);
