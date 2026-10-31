@@ -1285,8 +1285,12 @@ function outcomesYaml() {
   const labels = outcomeLabelsInData();
   const list = (k) => labels.filter(l => outcomeChoice[l] === k);
   const yamlList = (key, vals) => vals.length ? `${key}:\n` + vals.map(v => `  - ${JSON.stringify(v)}`).join('\n') : `${key}: []`;
+  // mLOS needs the three outcome lists, each possibly empty, but refuses an
+  // empty outcome_type_in_care, so an export in which every stay has ended,
+  // such as one of exits only, leaves that key out.
+  const inCare = list('in_care');
   return [yamlList('outcome_type_delete', ['_NODATE_', ...list('delete')]),
-          yamlList('outcome_type_in_care', list('in_care')),
+          ...(inCare.length ? [yamlList('outcome_type_in_care', inCare)] : []),
           yamlList('outcome_type_L', list('L')),
           yamlList('outcome_type_T', list('T')),
           yamlList('outcome_type_N', list('N'))].join('\n');
