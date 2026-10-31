@@ -132,7 +132,7 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <span class="step">Step 7</span>
     <h2>Prepare the data</h2>
     <p class="help">These choices become a ShelterDataPrep configuration file. The other rules (the animal size labels) are taken from the existing Mission Viejo configuration and stay fixed in this demo. Outcome and intake labels pass through unchanged and are classified in step 8.</p>
-    <div id="cfg-panel" hidden><p class="status warn" id="cfg-panel-note"></p><ul class="help" id="cfg-changes"></ul></div>
+    <div id="cfg-panel" hidden><p class="status warn" id="cfg-panel-note"></p><ul class="help" id="cfg-changes"></ul><p class="status" id="cfg-window-note"></p></div>
     <details><summary>Show the configuration file</summary><pre id="config-yaml"></pre></details>
     <button id="prep-btn">Prepare the data</button>
     <p class="status" id="s5-status"></p>
@@ -155,7 +155,7 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <datalist id="intake-groups"></datalist>
     <p class="status" id="intake-note"></p>
     <h3 style="margin:8px 0 0; font-size:15px">Set the periods</h3>
-    <p class="help">mLOS compares periods within the study window. Add up to three dividing dates to split it into as many as four periods, and name each one. The slow features are turned off.</p>
+    <p class="help">mLOS compares periods within the study window. Add up to three dividing dates to split it into as many as four periods, and name each one. Choose the dates before looking at the results: at real events where there are any (a new program, a policy change), otherwise at calendar years or half-years. Aim for at least 100 outcomes in each period.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
       <span class="help">Dividing dates (each starts a new period):</span>
       <input type="date" id="div-0" value="2019-01-01" aria-label="Dividing date 1">
@@ -167,6 +167,19 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <div class="grid2">
       <label for="group-by">Compare animals by</label>
       <select id="group-by"></select>
+    </div>
+    <h3 style="margin:8px 0 0; font-size:15px">Set the analysis horizon</h3>
+    <p class="help">The longest stay the analysis follows (<code>restricted_stay_cap</code>). A stay that reaches it counts as in care up to that day, and nothing after it is used. Too low, and real long stays are cut short; too high, and a few mistaken records can dominate the averages. Start at 365 days, then check the fraction still in care at the horizon, which the results report after the run.</p>
+    <div class="grid2">
+      <label for="cap">Longest stay followed (days)</label><input type="number" id="cap" value="365" min="1" step="1">
+      <label for="plot-cap">Plots show days up to</label><input type="number" id="plot-cap" value="58" min="1" step="1">
+    </div>
+    <p class="status" id="cap-note"></p>
+    <h3 style="margin:8px 0 0; font-size:15px">Choose the reference groups</h3>
+    <p class="help">Each hazard ratio compares a group with its reference. The largest group is usually the right one; choose another large group if the ratios come out extreme or their intervals very wide.</p>
+    <div class="grid2">
+      <label for="ref-intake">Intake groups compared with</label><select id="ref-intake"></select>
+      <label for="ref-group">Animal groups compared with</label><select id="ref-group"></select>
     </div>
     </div>
     <button id="run-btn">Run mLOS</button>
@@ -270,6 +283,9 @@ function loadText(name, text) {
   buildAnimals();
   $('s5').classList.remove('locked');
   buildAges();
+  windowEdited = false;
+  buildDates();
+  defaultWindow();
   if (pendingConfigAnswers) {
     const { name: n, answers } = pendingConfigAnswers;
     pendingConfigAnswers = null;
@@ -337,6 +353,7 @@ function applyFiles(rebuildDates = false) {
   if (ownConfig || ownSettings) $('files-box').open = true;
   $('config-yaml').textContent = ownConfig ? ownConfig.text : (header.length ? configYaml() : '');
   refresh(rebuildDates);
+  configFacts();
 }
 // The page's own files end with its form answers, so loading one back fills
 // in the forms. A checksum of the rest of the file says whether it was edited
@@ -385,6 +402,7 @@ function restoreConfig(a) {
   dateFormat = a.dateFormat;
   $('win-start').value = a.window[0];
   $('win-end').value = a.window[1];
+  windowEdited = true;
   DEFAULT_AGES.forEach((_, k) => {
     const g = a.ages[k];
     $('age-name-' + k).value = g ? g[0] : '';
@@ -394,7 +412,8 @@ function restoreConfig(a) {
 }
 function settingsAnswers(group) {
   return { outcomes: outcomeChoice, intakes: intakeChoice, dividers: [0, 1, 2].map(k => $('div-' + k).value),
-           labels: periodLabels(), group };
+           labels: periodLabels(), group, cap: capValue(), plotCap: +$('plot-cap').value,
+           references: { intake: $('ref-intake').value, group: $('ref-group').value } };
 }
 function restoreSettings(a) {
   outcomeChoice = { ...a.outcomes };
@@ -402,7 +421,49 @@ function restoreSettings(a) {
   [0, 1, 2].forEach(k => $('div-' + k).value = a.dividers[k] || '');
   pendingLabels = a.labels;
   wantGroup = a.group;
-  if (prepared) { buildOutcomes(); buildIntakes(); buildGroupBy(); }
+  $('cap').value = a.cap || 365;
+  $('plot-cap').value = a.plotCap || 58;
+  wantRefs = a.references || { intake: '', group: '' };
+  horizonCheck();
+  if (prepared) { buildOutcomes(); buildIntakes(); buildGroupBy(); buildReferences(); }
+}
+
+// An uploaded configuration's dates are read by ShelterDataPrep itself, with
+// the file's own columns and date format, so the window checks see what the
+// preparation will.
+async function configFacts() {
+  const cfg = ownConfig, key = exportName + '|' + rows.length;
+  if (!cfg || !header.length || cfg.factsKey === key) return;
+  cfg.factsKey = key;
+  const py = await pyReady;
+  py.FS.mkdirTree('/work/out');
+  py.FS.writeFile('/work/export.csv', exportText);
+  try {
+    const facts = JSON.parse(py.runPython(`
+import json
+from dataclasses import replace
+from pathlib import Path
+import pandas as pd
+from shelterprep import load, Prep
+s = replace(load('/work/upload_config.yaml'), source_dir=Path('/work'), source_file='export.csv', sheet=None,
+            dest_dir=Path('/work/out'), dest_file='prepared.csv')
+frame = Prep(s).read().frame
+today = pd.Timestamp('${todayIso()}')
+iso = lambda t: str(t.date())
+facts = {}
+for column in ('intake_date', 'outcome_date', 'dob'):
+    if column in frame:
+        v = frame[column].dropna().sort_values()
+        real = v[v <= today]
+        facts[column] = {'first': iso(v.iloc[0]) if len(v) else None,
+                         'last_real': iso(real.iloc[-1]) if len(real) else None,
+                         'future': [iso(t) for t in v[v > today]]}
+json.dumps(facts)`));
+    if (ownConfig === cfg) { cfg.facts = facts; windowNote(); }
+  } catch (err) {
+    if (ownConfig === cfg) { $('cfg-window-note').className = 'status bad'; $('cfg-window-note').textContent = 'ShelterDataPrep could not read the export with this configuration: ' + pyError(err); }
+    window.demo.errors.push(String(err));
+  }
 }
 
 $('cfg-input').onchange = async (e) => {
@@ -492,7 +553,7 @@ import json, yaml
 raw = yaml.safe_load(open('/work/upload_settings.yaml', encoding='utf-8'))
 if not isinstance(raw, dict):
     raise ValueError('the file is not a list of settings')
-json.dumps({k: raw.get(k) for k in ${JSON.stringify(FORCED_OFF.map(x => x[0]))}}, default=str)`));
+json.dumps({k: raw.get(k) for k in ${JSON.stringify([...FORCED_OFF.map(x => x[0]), 'restricted_stay_cap'])}}, default=str)`));
     let effective = text;
     const changes = [];
     for (const [key, why] of FORCED_OFF) {
@@ -515,7 +576,7 @@ json.dumps({k: raw.get(k) for k in ${JSON.stringify(FORCED_OFF.map(x => x[0]))}}
         invisible(extract_references(s, define_periods(s)))
       })`);
     } finally { sh.purge(); }
-    ownSettings = { name: f.name, text, effective, changes };
+    ownSettings = { name: f.name, text, effective, changes, cap: Number.isInteger(values.restricted_stay_cap) ? values.restricted_stay_cap : null };
     st.className = 'status ok'; st.textContent = `Using ${f.name} for the choices in step 8.` +
       (ans ? ' It was edited after the page wrote it, so it runs as written rather than filling in the choices.' : '');
   } catch (err) {
@@ -767,15 +828,88 @@ function isoOf(v) {
   let y = +x[f.order[0]]; if (y < 100) y += 2000;
   return `${y}-${String(+x[f.order[1]]).padStart(2, '0')}-${String(+x[f.order[2]]).padStart(2, '0')}`;
 }
+// The export's date range, as the window checks need it: the first intake,
+// and for each date column its last date up to today and the dates after
+// today. Read here with the format chosen in step 4, or for an uploaded
+// configuration by ShelterDataPrep's own reader (configFacts).
+const todayIso = () => { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; };
+let factsCache = { key: null, facts: null };
+function formFacts() {
+  const m = mapping(), key = [exportName, rows.length, m.intake_date, m.outcome_date, m.dob, dateFormat].join('|');
+  if (factsCache.key === key) return factsCache.facts;
+  const today = todayIso(), facts = {};
+  for (const col of ['intake_date', 'outcome_date', 'dob']) {
+    const i = header.indexOf(m[col]);
+    if (i < 0) continue;
+    const d = rows.map(r => isoOf(r[i])).filter(Boolean).sort();
+    const real = d.filter(x => x <= today);
+    facts[col] = { first: d[0] || null, last_real: real.length ? real[real.length - 1] : null, future: d.filter(x => x > today) };
+  }
+  factsCache = { key, facts };
+  return facts;
+}
+const exportFacts = () => ownConfig ? ownConfig.facts || null : formFacts();
+// The window may run to the day after the earlier of the last intake and the
+// last outcome: past that, the export records no exits, so every animal in
+// care would look as if it never left.
+function stopLimit(facts) {
+  const ends = ['intake_date', 'outcome_date'].map(c => facts[c] && facts[c].last_real).filter(Boolean).sort();
+  return ends.length ? { last: ends[0], which: facts.outcome_date && facts.outcome_date.last_real === ends[0] ? 'outcome' : 'intake', stop: addDay(ends[0], 1) } : null;
+}
+// The analysis follows a stay up to the cap, so an export cut by intake date
+// misses nothing once the window starts a cap's length after its first intake.
+function windowLead(facts) {
+  const first = facts.intake_date && facts.intake_date.first, cap = capValue();
+  if (!first || !cap) return null;
+  const days = Math.round((Date.parse($('win-start').value) - Date.parse(first)) / 864e5);
+  return { first, cap, days, safeStart: addDay(first, cap) };
+}
+const firstOfMonthOnOrAfter = (iso) => iso.slice(8) === '01' ? iso : addDay(iso.slice(0, 7) + '-01', 31).slice(0, 7) + '-01';
+const firstOfMonthOnOrBefore = (iso) => iso.slice(0, 7) + '-01';
+// Defaults drawn from the export: the window starts a cap's length after the
+// first intake and stops at a month start the records reach, and the dividing
+// dates split it into about four periods at New Year.
+let windowEdited = false;
+function defaultWindow() {
+  const facts = formFacts(), limit = stopLimit(facts), first = facts.intake_date && facts.intake_date.first;
+  if (windowEdited || !first || !limit) return;
+  const stop = firstOfMonthOnOrBefore(limit.stop);
+  let start = firstOfMonthOnOrAfter(addDay(first, capValue() || 365));
+  if (start >= stop) start = firstOfMonthOnOrAfter(first);
+  $('win-start').value = start;
+  $('win-end').value = stop;
+  const t0 = Date.parse(start), span = Date.parse(stop) - t0;
+  const divs = [...new Set([1, 2, 3].map(k => `${new Date(t0 + span * k / 4 + 182.6 * 864e5).getUTCFullYear()}-01-01`))]
+    .filter(d => d > start && d < stop);
+  [0, 1, 2].forEach(k => $('div-' + k).value = divs[k] || '');
+}
 function windowNote() {
-  const i = header.indexOf(mapping().intake_date);
-  const d = rows.map(r => isoOf(r[i])).filter(Boolean).sort();
-  const s = $('win-start').value, e = $('win-end').value, note = $('win-note');
-  if (!d.length) { note.textContent = ''; return; }
-  const after = d.filter(x => x >= e).length;
-  note.className = s && e && s < e ? 'status' : 'status bad';
-  note.textContent = !(s && e && s < e) ? 'The first day must come before the stop date.' :
-    `The export's intake dates run from ${d[0]} to ${d[d.length - 1]}.` + (after ? ` ${after.toLocaleString()} intake(s) fall on or after the stop date and will be dropped.` : '');
+  const note = ownConfig ? $('cfg-window-note') : $('win-note');
+  const s = $('win-start').value, e = $('win-end').value, facts = exportFacts();
+  const problems = [], warnings = [], lines = [], tail = [];
+  if (!(s && e && s < e)) problems.push('The first day must come before the stop date.');
+  if (facts && facts.intake_date && facts.intake_date.first) {
+    const fi = facts.intake_date;
+    lines.push(`The export's intake dates run from ${fi.first} to ${fi.last_real}.`);
+    const future = ['intake_date', 'outcome_date', 'dob'].filter(c => facts[c] && facts[c].future.length)
+      .map(c => `${{ intake_date: 'intake', outcome_date: 'outcome', dob: 'date of birth' }[c]} ${facts[c].future.slice(0, 3).join(', ')}` + (facts[c].future.length > 3 ? ` and ${facts[c].future.length - 3} more` : ''));
+    if (future.length) warnings.push(`Dates after today, which are errors in the export: ${future.join('; ')}. These checks leave them out.`);
+    const limit = stopLimit(facts);
+    if (limit && e > limit.stop) problems.push(`The stop date can be no later than ${limit.stop}, the day after the export's last ${limit.which} (${limit.last}): after that the export records no ${limit.which === 'outcome' ? 'exits, so the animals in care would look as if none ever left' : 'intakes'}. A few days earlier still leaves room for outcomes recorded late.`);
+    const lead = windowLead(facts);
+    if (lead && lead.days < lead.cap) warnings.push(`The window starts ${lead.days} days after the export's first intake, fewer than the ${lead.cap}-day horizon ${ownSettings ? 'in ' + ownSettings.name : 'set in step 8'}. If the export holds only animals admitted from ${lead.first} on, animals admitted earlier and still in care on ${s} are missing; the results after the run estimate how many. Starting on or after ${lead.safeStart} avoids the question.`);
+    if (!ownConfig) {
+      const i = header.indexOf(mapping().intake_date);
+      const after = rows.map(r => isoOf(r[i])).filter(x => x && x >= e).length;
+      if (after) tail.push(`${after.toLocaleString()} intake(s) fall on or after the stop date and will be dropped.`);
+    }
+  } else if (ownConfig && header.length) {
+    lines.push('Reading the export\'s dates...');
+  }
+  note.className = problems.length ? 'status bad' : warnings.length ? 'status warn' : 'status';
+  note.textContent = [...lines, ...problems, ...warnings, ...tail].join(' ');
+  window.demo.windowProblems = problems;
+  return problems;
 }
 // Outcome labels pass through ShelterDataPrep unchanged and are classified in
 // step 8. One step stays here: a row naming an outcome but carrying no usable
@@ -806,6 +940,7 @@ let prepared = null, preparedConfig = null;
 $('prep-btn').onclick = async () => {
   const st = $('s5-status');
   if (!ownConfig && animalsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose the species in step 3 first.'; return; }
+  if (windowNote().length) { st.className = 'status bad'; st.textContent = 'Fix the study window first' + (ownConfig ? ', in the configuration file.' : ', in step 5.'); return; }
   $('prep-btn').disabled = true; $('prep-results').replaceChildren(); $('s6').classList.add('locked');
   st.className = 'status'; st.textContent = 'Waiting for Python...';
   const py = await pyReady;
@@ -841,6 +976,7 @@ buf.getvalue()`);
     buildOutcomes();
     buildIntakes();
     buildGroupBy();
+    buildReferences();
     window.demo.prepReport = report;
   } catch (e) {
     const msg = String(e.message || e).split('\n').filter(Boolean);
@@ -1030,6 +1166,7 @@ function intakeCheck() {
   const clash = counts.filter(([l]) => intakeChoice[l].leaveOut && names.includes(l));
   if (clash.length) problems.push(clash.map(([l]) => `${shownLabel(l)} is left out but is also the name of a kept group; rename that group`).join('; '));
   $('intake-groups').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+  if ($('ref-intake').options.length) fillReference('ref-intake', names);
   const note = $('intake-note');
   note.className = problems.length ? 'status warn' : 'status';
   note.textContent = problems.length ? 'Before running: ' + problems.join('; ') + '.' :
@@ -1095,6 +1232,7 @@ function periodCheck() {
 }
 ['div-0', 'div-1', 'div-2'].forEach(id => $(id).addEventListener('change', () => refresh(false)));
 ['win-start', 'win-end'].forEach(id => $(id).addEventListener('change', () => {
+  windowEdited = true;
   refresh(false);
   if (prepared) {
     prepared = null; $('s6').classList.add('locked'); $('prep-results').replaceChildren();
@@ -1119,8 +1257,50 @@ function buildGroupBy() {
   sel.value = cols.includes(keep) ? keep : cols.includes('age_group') ? 'age_group' : (cols[0] || '');
 }
 
+// ---------- step 8: horizon and reference groups ----------
+// The cap is set here, beside the other analysis choices, and read in step 5
+// too, where the window's start is checked against it.
+const capValue = () => ownSettings ? ownSettings.cap : (/^\d+$/.test($('cap').value) && +$('cap').value > 0 ? +$('cap').value : null);
+function horizonCheck() {
+  const problems = [], cap = capValue(), plotCap = $('plot-cap').value;
+  if (!ownSettings) {
+    if (!cap) problems.push('the longest stay followed must be a whole number of days');
+    if (!(/^\d+$/.test(plotCap) && +plotCap > 0)) problems.push('the plotted days must be a whole number');
+    else if (cap && +plotCap > cap) problems.push('the plots cannot show more days than the analysis follows');
+  }
+  const note = $('cap-note');
+  note.className = problems.length ? 'status bad' : 'status';
+  note.textContent = problems.length ? 'Fix before running: ' + problems.join('; ') + '.' : '';
+  return problems;
+}
+let wantRefs = { intake: '', group: '' };
+function fillReference(id, names, want) {
+  const sel = $(id), keep = want != null ? want : sel.value;
+  sel.innerHTML = '<option value="">the largest group (default)</option>' + names.map(n => `<option value="${esc(n)}">${esc(shownLabel(n))}</option>`).join('');
+  sel.value = names.includes(keep) ? keep : '';
+}
+function buildReferences() {
+  if (!prepared) return;
+  fillReference('ref-intake', intakeGroups().map(g => g[0]), wantRefs.intake);
+  const group = $('group-by').value;
+  fillReference('ref-group', group ? countBy(parseCSV(prepared), group).map(g => g[0]) : [], wantRefs.group);
+  wantRefs = { intake: null, group: null };
+}
+// A new cap rechecks the window's start but never moves it: the data may
+// already be prepared with that window.
+$('cap').addEventListener('input', () => { horizonCheck(); windowNote(); });
+$('plot-cap').addEventListener('input', horizonCheck);
+$('group-by').addEventListener('change', () => fillReference('ref-group', countBy(parseCSV(prepared), $('group-by').value).map(g => g[0])));
+function referencesYaml() {
+  const lines = [];
+  if ($('ref-intake').value && intakeCounts().length) lines.push(`intake_type_reference: ${JSON.stringify($('ref-intake').value)}`);
+  if ($('ref-group').value) lines.push(`animal_group_reference: ${JSON.stringify($('ref-group').value)}`);
+  return lines.map(l => l + '\n').join('');
+}
+
 // ---------- step 7: run mLOS ----------
 const GROUP_CAP = 6;
+let lastRunCap = null, lastRunLead = null;
 let runNo = 0;
 $('run-btn').onclick = async () => {
   const st = $('s6-status');
@@ -1131,6 +1311,7 @@ $('run-btn').onclick = async () => {
   if (!ownSettings && outcomeCheck().length) { st.className = 'status bad'; st.textContent = 'Classify every outcome label first.'; return; }
   if (!ownSettings && intakeCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the intake groups first.'; return; }
   if (!ownSettings && periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
+  if (horizonCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the analysis horizon first.'; return; }
   if (!ownSettings && !group) { st.className = 'status bad'; st.textContent = 'The prepared data has no column to compare animals by.'; return; }
   if (!ownSettings && groupLevels.length > GROUP_CAP) {
     st.className = 'status bad';
@@ -1145,7 +1326,8 @@ $('run-btn').onclick = async () => {
   const out = '/out_' + (++runNo);
   const template = await (await fetch('mlos_settings_template.yaml')).text();
   const settingsText = ownSettings ? ownSettings.effective : withAnswers(
-    template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml()),
+    template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml())
+      .replace('__CAP__', capValue()).replace('__PLOTCAP__', +$('plot-cap').value).replace('__REFERENCES__', referencesYaml()),
     settingsAnswers(group));
   window.demo.settingsYaml = settingsText;
   await webR.FS.writeFile('/mlos/settings.yaml', new TextEncoder().encode(settingsText));
@@ -1189,6 +1371,8 @@ $('run-btn').onclick = async () => {
     mark('analyze', t0);
     st.className = 'status ok';
     st.textContent = `Finished in ${window.demo.timings.analyze} s.`;
+    lastRunCap = capValue();
+    lastRunLead = exportFacts() && windowLead(exportFacts());
     await showRun(out, group);
   } catch (e) {
     st.className = 'status bad';
@@ -1197,6 +1381,45 @@ $('run-btn').onclick = async () => {
   }
   $('run-btn').disabled = false;
 };
+
+// ---------- step 8: what to check in the results ----------
+// The User Guide's checks on a run, read from its results: the fraction still
+// in care at the horizon (worth attention at 0.5%, a second run at 1%), at
+// least 100 outcomes in each group, the residents an export cut by intake date
+// may miss at the window's start, and the overlapping stays dropped.
+// Two decimals below 10%, so a value just under a threshold (0.98%) never reads as reaching it.
+const pct = (x) => (100 * x).toFixed(x < 0.1 ? 2 : 1) + '%';
+function resultRow(table, row) {
+  const i = table.rows.indexOf(row);
+  return i < 0 ? [] : table.columns.map((c, k) => [c, table.values[i][k]]);
+}
+async function runChecks(out, cap, lead) {
+  const res = JSON.parse(new TextDecoder().decode(await webR.FS.readFile(out + '/results.json')));
+  const items = [];
+  const strata = ['all', 'period', 'intake_type', 'animal_group'].filter(k => res.strata[k]);
+  const atCap = strata.flatMap(k => resultRow(res.strata[k].km, 'km_still_in_care_at_cap').map(([c, v]) => [k === 'all' ? 'all animals' : shownLabel(c), v]))
+    .filter(([, v]) => typeof v === 'number');
+  const high = atCap.filter(([, v]) => v >= 0.005), top = atCap.reduce((a, b) => (b[1] > a[1] ? b : a), ['', 0]);
+  items.push(high.length ?
+    { level: high.some(([, v]) => v >= 0.01) ? 'bad' : 'warn', text: `Still in care at the ${cap}-day horizon: ` + high.map(([c, v]) => `${c} ${pct(v)}`).join(', ') +
+      ' of arrivals. The User Guide treats 0.5% as worth attention and 1% as a reason for a second run at a different horizon: animals that stay that long are a much larger share of the residents, so the census and tenure figures are low. If the long stays are real, a longer horizon measures them; if they are mistaken records, a shorter one keeps them from dominating.' } :
+    { level: 'ok', text: `At most ${pct(top[1])} of any group's arrivals (${top[0]}) are still in care at the ${cap}-day horizon, under the 0.5% the User Guide treats as worth attention.` });
+  const few = strata.filter(k => k !== 'all').flatMap(k => resultRow(res.strata[k].outcomes, 'completed_outcomes_total').map(([c, v]) => [shownLabel(c), v]))
+    .filter(([, v]) => typeof v === 'number' && v < 100);
+  if (few.length) items.push({ level: 'warn', text: 'Fewer than the 100 outcomes the User Guide recommends per group: ' + few.map(([c, v]) => `${c} (${v})`).join(', ') + '. Their curves and ratios are imprecise; longer periods or merged groups give more.' });
+  if (lead && lead.days < lead.cap) {
+    const tenure = parseCSV(new TextDecoder().decode(await webR.FS.readFile(out + '/km_in_care_tenure_unified.csv')));
+    const at = tenure.slice(1).filter(r => /^\d+$/.test(r[0]) && +r[0] <= lead.days).pop();
+    if (at) items.push({ level: 'warn', text: `The window starts ${lead.days} days after the export's first intake. In a shelter in its usual state, ${pct(+at[1])} of the residents on any day have been in care longer than that, so if the export holds only animals admitted from ${lead.first} on, about that share of the residents on the window's first day are missing from it. A shelter emptied or newly opened just before the window loses less.` });
+  }
+  const led = res.data_preparation.ledger.columns, j = led.name.indexOf('overlapping_stays');
+  if (j >= 0 && led.rows_affected[j] > 0) items.push({ level: 'warn', text: `${led.rows_affected[j].toLocaleString()} stays overlapped another stay of the same animal; the shorter of each pair was dropped (discard_overlapping_rows).` });
+  const box = document.createElement('div');
+  box.innerHTML = '<h3 style="margin:8px 0 4px; font-size:15px">Checks on these results</h3>';
+  for (const it of items) { const q = document.createElement('p'); q.className = 'status ' + it.level; q.textContent = it.text; box.append(q); }
+  window.demo.runChecks = items;
+  return box;
+}
 
 const DEFAULT_PLOTS = ['km_survival_unified.png', 'km_in_care_tenure_unified.png', 'km_remaining_los_unified.png',
                        'km_survival_by_period.png', 'km_survival_by_animal_group.png', 'aj_cif_unified_stack.png'];
@@ -1262,7 +1485,7 @@ async function showRun(out, group) {
   reset.onclick = () => { chosenPlots = [...DEFAULT_PLOTS]; list.querySelectorAll('input').forEach((i, k) => i.checked = chosenPlots.includes(pngs[k])); draw(); };
   pick.append(list, reset);
   draw();
-  wrap.append(intro, grid, pick);
+  wrap.append(intro, await runChecks(out, lastRunCap, lastRunLead), grid, pick);
   const sd = document.createElement('details');
   sd.innerHTML = '<summary>Show the mLOS settings file</summary><pre></pre>';
   sd.querySelector('pre').textContent = window.demo.settingsYaml;
