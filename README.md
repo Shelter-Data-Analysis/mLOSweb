@@ -1,6 +1,6 @@
 # mLOS Web
 
-A web page that runs ShelterDataPrep and mLOS in the browser, for animal shelters without an R or Python installation. The shelter loads a CSV export of its stays, answers a few questions about it, and gets the mLOS plots, tables, and workbook. Everything runs in the visitor's browser: the data is not uploaded anywhere.
+A web page that runs ShelterDataPrep and mLOS in the browser, for animal shelters without an R or Python installation. The shelter loads a CSV export of its stays, answers a few questions about it, and gets the mLOS plots, tables, and workbook. A ShelterDataPrep configuration or an mLOS settings file, whether the page wrote it or it was prepared by hand, can stand in for the questions; the page lists each change it makes to such a file, such as turning off a feature the site does not run. Everything runs in the visitor's browser: the data is not uploaded anywhere.
 
 The page prepares the export with ShelterDataPrep, running in Pyodide (Python compiled to WebAssembly), then analyzes it with mLOS, running in webR (R compiled to WebAssembly). A last, separate step runs mLOS's deck builder, `mlos_review`, in the same Python to write a slide deck and a workbook of its tables, and shows the tables the user picks. All three programs run unchanged. The demo uses the Mission Viejo Animal Services export deposited in Zenodo (10.5281/zenodo.22051091).
 

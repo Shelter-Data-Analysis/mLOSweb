@@ -58,10 +58,21 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <p class="help">A CSV file exported from the shelter's software, one row per stay. The demo file is the Mission Viejo Animal Services export (dogs and cats, 2016 to 2025).</p>
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
       <button id="load-demo">Use the Mission Viejo export</button>
-      <label class="help">or choose a file: <input type="file" id="file-input" accept=".csv"></label>
+      <label class="help">or choose a file: <input type="file" id="file-input" accept=".csv,.gz"></label>
     </div>
     <p class="status" id="s1-status"></p>
     <div class="scroll" id="preview"></div>
+    <details id="files-box"><summary>Already have a ShelterDataPrep configuration or an mLOS settings file?</summary>
+      <p class="help">Either file, or both, can stand in for the steps it covers: a configuration for steps 2 to 6, a settings file for the choices in step 8. Each runs as written, except for the changes the page lists, so a file this page wrote, or one prepared by hand for the programs on your own computer, gives the same results here.</p>
+      <div class="grid2">
+        <label for="cfg-input">ShelterDataPrep configuration</label>
+        <span><input type="file" id="cfg-input" accept=".yaml,.yml"> <button class="secondary" id="cfg-drop" hidden>Stop using it</button></span>
+        <label for="set-input">mLOS settings file</label>
+        <span><input type="file" id="set-input" accept=".yaml,.yml"> <button class="secondary" id="set-drop" hidden>Stop using it</button></span>
+      </div>
+      <p class="status" id="cfg-status"></p>
+      <p class="status" id="set-status"></p>
+    </details>
   </section>
 
   <section id="s2" class="locked">
@@ -119,6 +130,7 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <span class="step">Step 7</span>
     <h2>Prepare the data</h2>
     <p class="help">These choices become a ShelterDataPrep configuration file. The other rules (the animal size labels) are taken from the existing Mission Viejo configuration and stay fixed in this demo. Outcome and intake labels pass through unchanged and are classified in step 8.</p>
+    <div id="cfg-panel" hidden><p class="status warn" id="cfg-panel-note"></p><ul class="help" id="cfg-changes"></ul></div>
     <details><summary>Show the configuration file</summary><pre id="config-yaml"></pre></details>
     <button id="prep-btn">Prepare the data</button>
     <p class="status" id="s5-status"></p>
@@ -128,6 +140,9 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
   <section id="s6" class="locked">
     <span class="step">Step 8</span>
     <h2>Run the analysis</h2>
+    <div id="set-panel" hidden><p class="status warn" id="set-panel-note"></p><ul class="help" id="set-changes"></ul>
+      <details><summary>Show the settings file as it will run</summary><pre id="set-yaml"></pre></details></div>
+    <div id="s6-forms" style="display:flex; flex-direction:column; gap:10px">
     <h3 style="margin:4px 0 0; font-size:15px">Classify the outcomes</h3>
     <p class="help">Each outcome label in the prepared data, with the number of stays that end in it. Choose what each one means. Guesses are filled in where the label is a common one; every label needs a choice before the analysis can run.</p>
     <div class="scroll"><table id="outcome-table"></table></div>
@@ -149,10 +164,8 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <p class="status" id="period-note"></p>
     <div class="grid2">
       <label for="group-by">Compare animals by</label>
-      <select id="group-by">
-        <option value="age_group">age group (step 6)</option>
-        <option value="animal_size">size</option>
-      </select>
+      <select id="group-by"></select>
+    </div>
     </div>
     <button id="run-btn">Run mLOS</button>
     <p class="status" id="s6-status"></p>
@@ -253,14 +266,164 @@ function loadText(name, text) {
   $('preview').replaceChildren(t);
   buildMapping();
   buildAnimals();
-  for (const id of ['s2', 's2b', 's3', 's3b', 's4', 's5']) $(id).classList.remove('locked');
+  $('s5').classList.remove('locked');
   buildAges();
-  refresh();
+  applyFiles(true);
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 $('load-demo').onclick = async () => loadText('mission_viejo_export.csv', await (await fetch('data/mission_viejo_export.csv')).text());
-$('file-input').onchange = async (e) => { const f = e.target.files[0]; if (f) loadText(f.name, await f.text()); };
+$('file-input').onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  // A .gz export, as the Zenodo deposits hold them, is read uncompressed.
+  const text = f.name.toLowerCase().endsWith('.gz') ? await new Response(f.stream().pipeThrough(new DecompressionStream('gzip'))).text() : await f.text();
+  loadText(f.name, text);
+};
+
+// ---------- files from earlier runs ----------
+// An uploaded ShelterDataPrep configuration stands in for steps 2 to 6, and an
+// uploaded mLOS settings file for the choices in step 8. Each runs as written,
+// apart from the changes listed beside it.
+let ownConfig = null, ownSettings = null;
+// Settings this site turns off whatever a file says, each with its reason.
+const FORCED_OFF = [
+  ['parametric_regression', 'the Weibull fit needs the flexsurv package, which this site does not carry'],
+  ['aj_conditional_ci', 'its confidence bounds refit the outcome curves once per day of tenure, which doubles the run'],
+];
+const PERIOD_CAP = 4;
+function pyError(e) {
+  const msg = String(e.message || e).split('\n').filter(Boolean);
+  return (msg.find(l => /Error:/.test(l)) || msg[msg.length - 1]).replace(/^[\w.]*Error: /, '');
+}
+// An R error's message without the call that raised it, which names mLOS internals.
+const rError = (e) => String(e.message || e).replace(/^Error in [\s\S]*?: /, '');
+// A file loaded in the other program's place says so before any other message.
+function otherKind(text, kind) {
+  const keys = new Set([...text.matchAll(/^([A-Za-z_]+)[ \t]*:/gm)].map(m => m[1]));
+  if (kind === 'config' && keys.has('period_dates')) return 'it looks like an mLOS settings file, which goes in the line below. ';
+  if (kind === 'settings' && (keys.has('steps') || keys.has('source_file'))) return 'it looks like a ShelterDataPrep configuration, which goes in the line above. ';
+  return '';
+}
+function forgetPrepared(why) {
+  if (!prepared) return;
+  prepared = null; $('s6').classList.add('locked'); $('s7').classList.add('locked'); $('prep-results').replaceChildren();
+  $('s5-status').className = 'status warn'; $('s5-status').textContent = why + ' Prepare the data again.';
+}
+function applyFiles(rebuildDates = false) {
+  if (header.length) for (const id of ['s2', 's2b', 's3', 's3b', 's4']) $(id).classList.toggle('locked', !!ownConfig);
+  $('cfg-drop').hidden = !ownConfig;
+  $('set-drop').hidden = !ownSettings;
+  $('cfg-panel').hidden = !ownConfig;
+  if (ownConfig) {
+    $('cfg-panel-note').textContent = `Steps 2 to 6 are skipped: the data is prepared with ${ownConfig.name}, as written, except:`;
+    $('cfg-changes').innerHTML = ownConfig.changes.map(c => `<li>${esc(c)}</li>`).join('');
+  }
+  $('set-panel').hidden = !ownSettings;
+  $('s6-forms').style.display = ownSettings ? 'none' : 'flex';
+  if (ownSettings) {
+    $('set-panel-note').textContent = `The analysis runs with ${ownSettings.name}` + (ownSettings.changes.length ? ', as written, except:' : ', as written.');
+    $('set-changes').innerHTML = ownSettings.changes.map(c => `<li>${esc(c)}</li>`).join('');
+    $('set-yaml').textContent = ownSettings.effective;
+  }
+  if (ownConfig || ownSettings) $('files-box').open = true;
+  $('config-yaml').textContent = ownConfig ? ownConfig.text : (header.length ? configYaml() : '');
+  refresh(rebuildDates);
+}
+$('cfg-input').onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  e.target.value = '';
+  const st = $('cfg-status');
+  st.className = 'status'; st.textContent = `Reading ${f.name}...`;
+  const text = await f.text();
+  const py = await pyReady;
+  py.FS.mkdirTree('/work');
+  py.FS.writeFile('/work/upload_config.yaml', text);
+  try {
+    // ShelterDataPrep's own reader checks the file, so its messages are the ones shown.
+    const info = JSON.parse(py.runPython(`
+import json
+from shelterprep import load
+s = load('/work/upload_config.yaml')
+json.dumps({'start': None if s.window_start_date is None else str(s.window_start_date.date()),
+            'stop': None if s.window_stop_date is None else str(s.window_stop_date.date()),
+            'source': s.source_file, 'sheet': s.sheet})`));
+    if (!info.start) throw new Error('it sets no study window (window_start_date and window_stop_date), which the periods in step 8 are drawn from');
+    $('win-start').value = info.start;
+    $('win-end').value = info.stop;
+    ownConfig = { name: f.name, text, changes: [
+      `It reads the export loaded in step 1 in place of ${info.source}` + (info.sheet ? `, as a CSV file rather than sheet ${info.sheet} of a workbook.` : '.'),
+      'It writes the prepared data inside this page, not to its dest_dir.',
+      'The page cannot check that it studies one species: its own steps have to remove the others, as step 3 does.',
+    ] };
+    st.className = 'status ok'; st.textContent = `Using ${f.name} for steps 2 to 6, with the study window ${info.start} to ${info.stop}.`;
+    forgetPrepared('A configuration was loaded.');
+  } catch (err) {
+    st.className = 'status bad';
+    st.textContent = `${f.name} cannot be used: ${otherKind(text, 'config')}` +
+      (err instanceof Error && !err.type ? err.message : pyError(err)).replaceAll('/work/upload_config.yaml', f.name);
+    window.demo.errors.push(String(err));
+    if (ownConfig) { ownConfig = null; forgetPrepared('The configuration was set aside.'); }
+  }
+  applyFiles();
+};
+$('cfg-drop').onclick = () => {
+  ownConfig = null; $('cfg-status').textContent = '';
+  forgetPrepared('The configuration was set aside.');
+  applyFiles();
+};
+$('set-input').onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  e.target.value = '';
+  const st = $('set-status');
+  st.className = 'status'; st.textContent = `Reading ${f.name}...`;
+  const text = await f.text();
+  const py = await pyReady;
+  py.FS.mkdirTree('/work');
+  py.FS.writeFile('/work/upload_settings.yaml', text);
+  try {
+    // mLOS checks the rest of the file when the analysis runs, against the data.
+    const values = JSON.parse(py.runPython(`
+import json, yaml
+raw = yaml.safe_load(open('/work/upload_settings.yaml', encoding='utf-8'))
+if not isinstance(raw, dict):
+    raise ValueError('the file is not a list of settings')
+json.dumps({k: raw.get(k) for k in ${JSON.stringify(FORCED_OFF.map(x => x[0]))}}, default=str)`));
+    let effective = text;
+    const changes = [];
+    for (const [key, why] of FORCED_OFF) {
+      if (values[key] === null || values[key] === false) continue;
+      const lines = text.match(new RegExp('^' + key + '[ \\t]*:.*$', 'gm'));
+      if (!lines || lines.length !== 1) throw new Error(`write ${key} on a line of its own, so the page can turn it off`);
+      effective = effective.replace(new RegExp('^' + key + '[ \\t]*:.*$', 'm'), `${key}: false  # turned off by mLOS Web`);
+      changes.push(`${key} is turned off: ${why}.`);
+    }
+    // mLOS reads the file as its run will, so a misspelled or misplaced
+    // setting is reported now. Its levels are checked against the data later.
+    const r = await rReady;
+    await r.FS.writeFile('/mlos/upload_settings.yaml', new TextEncoder().encode(effective));
+    const sh = await new r.Shelter();
+    try {
+      await sh.evalR(`local({
+        setwd('/mlos')
+        for (f in c('mlos_common.R', 'mlos_setup.R', 'mlos_data.R')) source(f, local = TRUE)
+        s <- read_settings('upload_settings.yaml')
+        invisible(extract_references(s, define_periods(s)))
+      })`);
+    } finally { sh.purge(); }
+    ownSettings = { name: f.name, text, effective, changes };
+    st.className = 'status ok'; st.textContent = `Using ${f.name} for the choices in step 8.`;
+  } catch (err) {
+    st.className = 'status bad';
+    st.textContent = `${f.name} cannot be used: ${otherKind(text, 'settings')}${err instanceof Error && !err.type ? rError(err) : pyError(err)}`;
+    window.demo.errors.push(String(err));
+    ownSettings = null;
+  }
+  applyFiles();
+};
+$('set-drop').onclick = () => { ownSettings = null; $('set-status').textContent = ''; applyFiles(); };
 
 // ---------- step 2: columns ----------
 const FIELDS = [
@@ -368,7 +531,7 @@ function animalsCheck() {
   note.className = 'status';
   note.textContent = `${total.toLocaleString()} rows of ${shownLabel(val)}` +
     (removed ? `; ${removed.toLocaleString()} of them marked as not shelter stays` + (notStay.filter(r => r.col && r.values.size).length > 1 ? ' (a row matched by two columns is counted twice here)' : '') : '') + '.';
-  if ($('config-yaml')) $('config-yaml').textContent = configYaml();
+  if ($('config-yaml') && !ownConfig) $('config-yaml').textContent = configYaml();
   return [];
 }
 function selectionSteps() {
@@ -531,14 +694,14 @@ function refresh(rebuildDates = true) {
   if (rebuildDates) buildDates();
   windowNote();
   buildPeriods();
-  $('config-yaml').textContent = configYaml();
+  if (!ownConfig) $('config-yaml').textContent = configYaml();
 }
 
 // ---------- step 5: run ShelterDataPrep ----------
 let prepared = null, preparedConfig = null;
 $('prep-btn').onclick = async () => {
   const st = $('s5-status');
-  if (animalsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose the species in step 3 first.'; return; }
+  if (!ownConfig && animalsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose the species in step 3 first.'; return; }
   $('prep-btn').disabled = true; $('prep-results').replaceChildren(); $('s6').classList.add('locked');
   st.className = 'status'; st.textContent = 'Waiting for Python...';
   const py = await pyReady;
@@ -547,14 +710,22 @@ $('prep-btn').onclick = async () => {
   try {
     py.FS.mkdirTree('/work/out');
     py.FS.writeFile('/work/export.csv', exportText);
-    preparedConfig = configYaml();
+    preparedConfig = ownConfig ? ownConfig.text : configYaml();
     py.FS.writeFile('/work/config.yaml', preparedConfig);
+    // An uploaded configuration reads the export loaded in step 1 and writes
+    // where the page looks; nothing else in it changes.
     const report = py.runPython(`
 import io, contextlib
+from dataclasses import replace
+from pathlib import Path
 from shelterprep import load, Prep
+settings = load('/work/config.yaml')
+if ${ownConfig ? 'True' : 'False'}:
+    settings = replace(settings, source_dir=Path('/work'), source_file='export.csv', sheet=None,
+                       dest_dir=Path('/work/out'), dest_file='prepared.csv')
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf):
-    Prep(load('/work/config.yaml')).run()
+    Prep(settings).run()
 buf.getvalue()`);
     mark('prepare', t0);
     prepared = py.FS.readFile('/work/out/prepared.csv', { encoding: 'utf8' });
@@ -565,6 +736,7 @@ buf.getvalue()`);
     $('s6').classList.remove('locked');
     buildOutcomes();
     buildIntakes();
+    buildGroupBy();
     window.demo.prepReport = report;
   } catch (e) {
     const msg = String(e.message || e).split('\n').filter(Boolean);
@@ -704,7 +876,11 @@ function outcomesYaml() {
 const INTAKE_CAP = 6;
 let intakeChoice = {};
 const shownLabel = (l) => l === '_UNKNOWN_' ? '(blank)' : l;
-function intakeCounts() { return countBy(parseCSV(prepared), 'intake_type'); }
+function intakeCounts() {
+  // A configuration may write no intake_type, and mLOS then compares none.
+  const csvRows = parseCSV(prepared);
+  return csvRows[0].includes('intake_type') ? countBy(csvRows, 'intake_type') : [];
+}
 function buildIntakes() {
   const counts = intakeCounts();
   counts.forEach(([label], k) => {
@@ -745,7 +921,7 @@ function intakeCheck() {
   const unnamed = counts.filter(([l]) => !intakeChoice[l].leaveOut && !intakeChoice[l].group);
   if (unnamed.length) problems.push('give a group name to ' + unnamed.map(([l]) => shownLabel(l)).join(', '));
   if (names.some(n => /[,=]/.test(n))) problems.push('a group name cannot contain a comma or an equals sign');
-  if (!groups.length) problems.push('keep at least one intake label');
+  if (!groups.length && counts.length) problems.push('keep at least one intake label');
   if (groups.length > INTAKE_CAP) problems.push(`combine the ${groups.length} groups into at most ${INTAKE_CAP}`);
   const clash = counts.filter(([l]) => intakeChoice[l].leaveOut && names.includes(l));
   if (clash.length) problems.push(clash.map(([l]) => `${shownLabel(l)} is left out but is also the name of a kept group; rename that group`).join('; '));
@@ -758,6 +934,7 @@ function intakeCheck() {
 }
 function intakesYaml() {
   const counts = intakeCounts();
+  if (!counts.length) return '';
   const pairs = counts.filter(([l]) => !intakeChoice[l].leaveOut && intakeChoice[l].group !== l)
                       .map(([l]) => `  - ${JSON.stringify(l)}: ${JSON.stringify(intakeChoice[l].group)}`);
   const pass = intakeGroups().map(([g]) => `  - ${JSON.stringify(g)}`);
@@ -824,6 +1001,17 @@ function periodsYaml() {
     '\nperiod_labels:\n' + periodLabels().map(l => `  - ${JSON.stringify(l)}`).join('\n');
 }
 
+// ---------- step 7: compare by ----------
+// Any prepared column beyond the ones every analysis reads can group the animals.
+const CORE_COLUMNS = ['animal_id', 'intake_date', 'outcome_date', 'outcome_type', 'intake_type'];
+const GROUP_LABELS = { age_group: 'age group', animal_size: 'size' };
+function buildGroupBy() {
+  const cols = parseCSV(prepared, 1)[0].filter(c => !CORE_COLUMNS.includes(c));
+  const sel = $('group-by'), keep = sel.value;
+  sel.innerHTML = cols.map(c => `<option value="${esc(c)}">${esc(GROUP_LABELS[c] || c)}</option>`).join('');
+  sel.value = cols.includes(keep) ? keep : cols.includes('age_group') ? 'age_group' : (cols[0] || '');
+}
+
 // ---------- step 7: run mLOS ----------
 const GROUP_CAP = 6;
 let runNo = 0;
@@ -832,11 +1020,12 @@ $('run-btn').onclick = async () => {
   const group = $('group-by').value;
   $('run-results').replaceChildren();
   const rowsP = parseCSV(prepared);
-  const groupLevels = countBy(rowsP, group);
-  if (outcomeCheck().length) { st.className = 'status bad'; st.textContent = 'Classify every outcome label first.'; return; }
-  if (intakeCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the intake groups first.'; return; }
-  if (periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
-  if (groupLevels.length > GROUP_CAP) {
+  const groupLevels = group ? countBy(rowsP, group) : [];
+  if (!ownSettings && outcomeCheck().length) { st.className = 'status bad'; st.textContent = 'Classify every outcome label first.'; return; }
+  if (!ownSettings && intakeCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the intake groups first.'; return; }
+  if (!ownSettings && periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
+  if (!ownSettings && !group) { st.className = 'status bad'; st.textContent = 'The prepared data has no column to compare animals by.'; return; }
+  if (!ownSettings && groupLevels.length > GROUP_CAP) {
     st.className = 'status bad';
     st.textContent = `This tool compares at most ${GROUP_CAP} groups, and ${group} has ${groupLevels.length}: ${groupLevels.map(x => x[0]).join(', ')}. Merge some of them, or compare by a different column.`;
     window.demo.capRefusal = st.textContent;
@@ -848,11 +1037,42 @@ $('run-btn').onclick = async () => {
   st.textContent = 'Running mLOS (keep this tab in front)...';
   const out = '/out_' + (++runNo);
   const template = await (await fetch('mlos_settings_template.yaml')).text();
-  const settingsText = template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml());
+  const settingsText = ownSettings ? ownSettings.effective :
+    template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml());
   window.demo.settingsYaml = settingsText;
   await webR.FS.writeFile('/mlos/settings.yaml', new TextEncoder().encode(settingsText));
   await webR.FS.writeFile('/mlos/prepared.csv', new TextEncoder().encode(prepared));
   rConsole = [];
+  if (ownSettings) {
+    // An uploaded file's levels are known only after mLOS has applied its maps
+    // and filters, so mLOS's own setup counts them before the run.
+    st.textContent = 'Checking the settings file against the data...';
+    let n;
+    const sh = await new webR.Shelter();
+    try {
+      n = await (await sh.evalR(`local({
+        setwd('/mlos')
+        for (f in c('mlos_common.R', 'mlos_setup.R', 'mlos_data.R')) source(f, local = TRUE)
+        s <- read_settings('settings.yaml')
+        r <- extract_references(s, define_periods(s))
+        r <- detect_optional_columns(read_and_prepare_data('prepared.csv', r), r)
+        c(r$n_periods, r$n_intake_types, r$n_animal_groups)
+      })`)).toArray();
+    } catch (e) {
+      st.className = 'status bad'; st.textContent = 'mLOS stopped: ' + rError(e);
+      window.demo.errors.push(String(e)); $('run-btn').disabled = false;
+      return;
+    } finally { sh.purge(); }
+    const over = [[n[0], PERIOD_CAP, 'periods'], [n[1], INTAKE_CAP, 'intake groups'], [n[2], GROUP_CAP, 'animal groups']].filter(([k, cap]) => k > cap);
+    if (over.length) {
+      st.className = 'status bad';
+      st.textContent = `This tool compares at most ${PERIOD_CAP} periods, ${INTAKE_CAP} intake groups, and ${GROUP_CAP} animal groups, and ${ownSettings.name} gives ` +
+        over.map(([k, , what]) => `${k} ${what}`).join(' and ') + '. Merge some of them in the file, with its maps or its period dates.';
+      window.demo.capRefusal = st.textContent; $('run-btn').disabled = false;
+      return;
+    }
+    st.textContent = 'Running mLOS (keep this tab in front)...';
+  }
   const t0 = performance.now();
   try {
     await webR.evalRVoid(`setwd('/mlos')
