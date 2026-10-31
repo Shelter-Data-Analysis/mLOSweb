@@ -279,10 +279,13 @@ function parseCSV(text, limit = Infinity) {
   return out;
 }
 
+// The column names come from the first row with a value in any column, as
+// ShelterDataPrep takes them.
 function loadText(name, text) {
-  const all = parseCSV(text);
+  const all = parseCSV(text), at = all.findIndex(r => r.some(v => v.trim()));
   $('sheet-row').hidden = true; $('sheet-note').textContent = '';
-  loadTable(name, { file: 'export.csv', data: text, sheet: null }, all[0].map(h => h.trim()), all.slice(1).filter(r => r.length > 1));
+  if (at < 0) { $('s1-status').className = 'status bad'; $('s1-status').textContent = `${name} has no column names: every row is empty.`; return; }
+  loadTable(name, { file: 'export.csv', data: text, sheet: null, headerRow: at, emptyRows: 0 }, all[at].map(h => h.trim()), all.slice(at + 1));
 }
 // A column with no name and no values, such as a spacer between columns, is
 // left off the page. ShelterDataPrep reads only the columns its configuration
@@ -292,15 +295,15 @@ function loadTable(name, source, head, body) {
   forgetPrepared('A different export was loaded.');
   const keep = head.map((h, i) => i).filter(i => !blankName(head[i]) || body.some(r => (r[i] || '').trim()));
   const dropped = head.length - keep.length;
-  // A row with no values, such as a spacer row, is left off the page too.
-  // ShelterDataPrep reads it as a stay with no dates, and its study-window
-  // step removes it.
+  // A row with no values, such as a spacer row, is left off the page too, as
+  // ShelterDataPrep leaves it out and counts it on its drop_empty row.
   const filled = body.filter(r => r.some(v => (v || '').trim()));
-  const blankRows = body.length - filled.length;
+  const blankRows = body.length - filled.length + (source.emptyRows || 0);
   exportName = name; exportSource = source;
   header = keep.map(i => head[i]); rows = dropped ? filled.map(r => keep.map(i => r[i] ?? '')) : filled;
   const left = [dropped ? `${dropped} empty column${dropped === 1 ? '' : 's'}, with no name and no values` : '',
-                blankRows ? `${blankRows.toLocaleString()} empty row${blankRows === 1 ? '' : 's'}` : ''].filter(Boolean);
+                blankRows ? `${blankRows.toLocaleString()} empty row${blankRows === 1 ? '' : 's'}` : '',
+                source.headerRow ? `the empty row${source.headerRow === 1 ? '' : 's'} above the column names, which are in row ${source.headerRow + 1}` : ''].filter(Boolean);
   $('s1-status').textContent = `${name}${source.sheet ? ', sheet ' + source.sheet : ''}: ${rows.length.toLocaleString()} row${rows.length === 1 ? '' : 's'}, ${header.length} column${header.length === 1 ? '' : 's'}` +
     (left.length ? ` (${left.join('; ')}, left out)` : '') + '. First five rows:';
   $('s1-status').className = 'status ok';
@@ -399,7 +402,13 @@ except ValueError as e:
     if 'stylesheet' not in str(e) or not (repaired := repair('/work/export.xlsx')):
         raise
     book = pd.ExcelFile('/work/export.xlsx')
-json.dumps({'repaired': repaired, 'sheets': [{'name': name, 'header': [str(h) for h in pd.read_excel(book, sheet_name=name, nrows=0).columns],
+# The names of a sheet, for the guess: its first row with a value, as
+# ShelterDataPrep takes them.
+def names(sheet):
+    top = pd.read_excel(book, sheet_name=sheet, header=None, nrows=50, dtype=str)
+    filled = [row for row in top.itertuples(index=False) if any(str(v).strip() for v in row if isinstance(v, str))]
+    return [v for v in filled[0] if isinstance(v, str) and v.strip()] if filled else []
+json.dumps({'repaired': repaired, 'sheets': [{'name': name, 'header': names(name),
              'rows': None if book.book[name].max_row is None else max(book.book[name].max_row - 1, 0)}
             for name in book.sheet_names]})`));
     const sheets = info.sheets;
@@ -423,14 +432,15 @@ async function readSheet(sheet) {
   const py = await loadExcelReader(), st = $('s1-status');
   st.className = 'status'; st.textContent = `Reading sheet ${sheet.name}...`;
   py.globals.set('sheet_name', sheet.name);
-  // ShelterDataPrep takes the column names from the first row, so a sheet
-  // whose first row is blank is reported rather than read with no names.
+  // ShelterDataPrep's own reader gives the rows and column names a run reads:
+  // the names from the first row with a value, the empty rows dropped.
   // A heading merged across columns keeps its text in the leftmost one, which
   // may be empty while the values sit in another column of the span; the
-  // merged ranges of row 1 are read from the sheet's XML for that reason.
+  // merged ranges of the row of names are read from the sheet's XML for that.
   const t = JSON.parse(py.runPython(`
 import posixpath, xml.etree.ElementTree as ET
-def header_merges(path, sheet):
+from shelterprep import read_source, SourceError
+def header_merges(path, sheet, row):
     ns = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
           'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'}
     with zipfile.ZipFile(path) as z:
@@ -440,19 +450,19 @@ def header_merges(path, sheet):
         part = target.lstrip('/') if target.startswith('/') else posixpath.normpath(posixpath.join('xl', target))
         xml = z.read(part).decode('utf-8', 'replace')
     index = lambda letters: sum((ord(c) - 64) * 26 ** k for k, c in enumerate(reversed(letters))) - 1
-    return [[index(a), index(b)] for a, b in re.findall(r'<mergeCell ref="([A-Z]+)1:([A-Z]+)[0-9]+"', xml) if a != b]
-frame = pd.read_excel('/work/export.xlsx', sheet_name=sheet_name, dtype=str).fillna('')
-top = pd.read_excel('/work/export.xlsx', sheet_name=sheet_name, header=None, nrows=10, dtype=str).notna().any(axis=1)
-json.dumps({'header': [str(h) for h in frame.columns], 'rows': frame.values.tolist(),
-            'name_row': int(top.values.argmax()) + 1 if top.any() else None,
-            'merges': header_merges('/work/export.xlsx', sheet_name)})`));
-  if (!t.header.length || t.name_row === null) { st.className = 'status bad'; st.textContent = `Sheet ${sheet.name} is empty. Choose another.`; return; }
-  if (t.name_row > 1) {
-    st.className = 'status bad';
-    st.textContent = `Sheet ${sheet.name} starts in row ${t.name_row}, and ShelterDataPrep reads the column names from row 1. In Excel, delete the rows above the column names, save, and load the workbook again.`;
-    $('preview').replaceChildren();
-    return;
-  }
+    found = re.findall(r'<mergeCell ref="([A-Z]+)([0-9]+):([A-Z]+)[0-9]+"', xml)
+    return [[index(a), index(b)] for a, r, b in found if int(r) == row and a != b]
+try:
+    frame, _, header_row, empty = read_source('/work/export.xlsx', sheet_name)
+    result = {'header': [str(h) for h in frame.columns], 'rows': frame.fillna('').values.tolist(),
+              'header_row': header_row, 'empty': empty,
+              'merges': header_merges('/work/export.xlsx', sheet_name, header_row + 1)}
+except SourceError as e:
+    result = {'error': str(e)}
+json.dumps(result)`));
+  $('sheet-note').className = workbook.repair ? 'status warn' : 'status';
+  $('sheet-note').textContent = workbook.note;
+  if (t.error) { st.className = 'status bad'; st.textContent = `Sheet ${sheet.name} cannot be read: ${t.error.replace('/work/export.xlsx', workbook.name).replace('export.xlsx', workbook.name)}. Choose another.`; $('preview').replaceChildren(); return; }
   // Where the named column of a merged heading is empty and exactly one other
   // column of the span, unnamed, holds values, the heading names that column.
   // The page shows it under the heading, and the configuration maps the
@@ -469,9 +479,8 @@ json.dumps({'header': [str(h) for h in frame.columns], 'rows': frame.values.toli
     head[under[0]] = head[a];
     head[a] = '';
   }
-  $('sheet-note').className = workbook.repair ? 'status warn' : 'status';
-  $('sheet-note').textContent = [workbook.note, moved.length ? `Merged headings in row 1 name the column of values under them: ${moved.join('; ')}. The configuration maps each to that column.` : ''].filter(Boolean).join(' ');
-  loadTable(workbook.name, { file: 'export.xlsx', data: workbook.data, sheet: sheet.name, fileNames }, head, t.rows);
+  $('sheet-note').textContent = [workbook.note, moved.length ? `Merged headings in the row of column names name the column of values under them: ${moved.join('; ')}. The configuration maps each to that column.` : ''].filter(Boolean).join(' ');
+  loadTable(workbook.name, { file: 'export.xlsx', data: workbook.data, sheet: sheet.name, fileNames, headerRow: t.header_row, emptyRows: t.empty }, head, t.rows);
 }
 // The name ShelterDataPrep knows a column of the export by.
 const fileName = (col) => (exportSource && exportSource.fileNames && exportSource.fileNames[col]) || col;
