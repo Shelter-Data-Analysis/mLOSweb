@@ -53,8 +53,17 @@ PYPI_WHEELS = [
      "7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa"),
 ]
 
-# The demo export: Mission Viejo Animal Services, deposited as MV_raw.csv.gz in
-# Zenodo record 10.5281/zenodo.22051091. The checksum is of the uncompressed
-# contents, as ShelterDataPrep's run log states it.
-DEMO_URL = "https://zenodo.org/records/22051091/files/MV_raw.csv.gz?download=1"
-DEMO_SHA256 = "bd448e8789ef82acd96354997d2a796f935f0ef960c7b623975bf29fadf8a880"
+# The demo exports, in the order the page lists them, each from Zenodo record
+# 10.5281/zenodo.22051091. The checksum is of the uncompressed contents, as
+# ShelterDataPrep's run log states it. "file" is the name the site serves it
+# under, and "label" what the page's list shows.
+DEMOS = [
+    {"file": "irvine_all_species.csv",
+     "label": "Irvine Animal Care Center, all species (CIall_raw.csv.gz, outcomes to 2025-02-02)",
+     "url": "https://zenodo.org/records/22051091/files/CIall_raw.csv.gz?download=1",
+     "sha256": "9a1cc20d24c1987564ea9ae59ac17d219b47232823ad472130c692b403eb6b7d"},
+    {"file": "mission_viejo_export.csv",
+     "label": "Mission Viejo Animal Services, dogs and cats (MV_raw.csv.gz, 2016 to 2025)",
+     "url": "https://zenodo.org/records/22051091/files/MV_raw.csv.gz?download=1",
+     "sha256": "bd448e8789ef82acd96354997d2a796f935f0ef960c7b623975bf29fadf8a880"},
+]

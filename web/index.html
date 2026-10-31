@@ -57,9 +57,10 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
   <section id="s1">
     <span class="step">Step 1</span>
     <h2>Load the export</h2>
-    <p class="help">A CSV file or an Excel workbook (.xlsx or .xlsm) exported from the shelter's software, one row per stay, with the column names in the first row. The demo file is the Mission Viejo Animal Services export (dogs and cats, 2016 to 2025).</p>
+    <p class="help">A CSV file or an Excel workbook (.xlsx or .xlsm) exported from the shelter's software, one row per stay, with the column names in the row above the data. The demo exports are raw files deposited in Zenodo (10.5281/zenodo.22051091), each a different shelter's or a different pull.</p>
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
-      <button id="load-demo">Use the Mission Viejo export</button>
+      <select id="demo-sel" aria-label="Demo export"></select>
+      <button id="load-demo">Use this demo export</button>
       <label class="help">or choose a file: <input type="file" id="file-input" accept=".csv,.gz,.xlsx,.xlsm"></label>
     </div>
     <div class="grid2" id="sheet-row" hidden>
@@ -329,7 +330,12 @@ function loadTable(name, source, head, body) {
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-$('load-demo').onclick = async () => loadText('mission_viejo_export.csv', await (await fetch('data/mission_viejo_export.csv')).text());
+// The demo exports build_site.py fetched, in the order pins.py lists them.
+$('demo-sel').innerHTML = manifest.demos.map((d, k) => `<option value="${k}">${esc(d.label)}</option>`).join('');
+$('load-demo').onclick = async () => {
+  const d = manifest.demos[+$('demo-sel').value];
+  loadText(d.file, await (await fetch('data/' + d.file)).text());
+};
 $('file-input').onchange = async (e) => {
   const f = e.target.files[0];
   if (!f) return;
@@ -968,29 +974,35 @@ function ageGroups() {
 }
 
 // ---------- step 5: configuration ----------
-const FIXED_RULES = `
+// The fixed rules, from ShelterDataPrep's configs/mission_viejo.yaml. A rule
+// on the size or the age group is left out when step 2 matches no size or no
+// date-of-birth column, since ShelterDataPrep refuses a step on a column the
+// export lacks.
+function fixedRules(size, age, firstAge) {
+  return `
 # --- fixed for this demo, from ShelterDataPrep's configs/mission_viejo.yaml ---
 unique_report: [animal_id]
 steps:
   - cut: {window_presence: [BEFORE, AFTER, _UNKNOWN_]}
-${'${SELECTION_STEPS}'}${'${NODATE_STEP}'}  - map:
+` + selectionSteps() + nodateStep() + (size ? `  - map:
       animal_size:
         LARGE:  LRG
         X-LRG:  XL
         KITEN:  _UNKNOWN_
         905V:   _UNKNOWN_
-  - map: {age_group: {_NEGATIVE_: _UNKNOWN_}}
-  - map: {age_group: {_UNKNOWN_: ${'${FIRST_AGE}'}}}
+` : '') + (age ? `  - map: {age_group: {_NEGATIVE_: _UNKNOWN_}}
+` : '') + (age && size ? `  - map: {age_group: {_UNKNOWN_: ${firstAge}}}
     where: {animal_size: PUPPY}
-  - cut: {night_sign: "-1"}
-  - cut: {age_group: _OVER_}
-  - dedup:
+` : '') + `  - cut: {night_sign: "-1"}
+` + (age ? `  - cut: {age_group: _OVER_}
+` : '') + `  - dedup:
     where: {night_sign: "1"}
 `;
+}
 function configYaml() { return withAnswers(configBody(), configAnswers()); }
 function configBody() {
   const m = mapping();
-  const ages = ageGroups();
+  const ages = ageGroups(), size = !!m.animal_size, age = !!m.dob && ages.length > 0;
   // A column the steps name, unmatched in step 2, whose heading the page
   // moved, is mapped too, so ShelterDataPrep finds it under the heading.
   const stepCols = [$('species-col').value, ...notStay.filter(r => r.col && r.values.size).map(r => r.col)];
@@ -1004,7 +1016,7 @@ source_file: ${JSON.stringify(exportSource.file)}
 ${exportSource.sheet === null ? '' : `sheet:       ${JSON.stringify(exportSource.sheet)}\n`}date_format: ${JSON.stringify(dateFormat)}
 dest_dir:    "/work/out"
 dest_file:   "prepared.csv"
-output_columns: [animal_id, intake_date, outcome_date, outcome_type, intake_type, animal_size, age_group]
+output_columns: [${['animal_id', 'intake_date', 'outcome_date', 'outcome_type', 'intake_type', ...(size ? ['animal_size'] : []), ...(age ? ['age_group'] : [])].join(', ')}]
 
 # step 2: the export's column for each piece of information
 columns:
@@ -1014,9 +1026,10 @@ ${cols}
 window_start_date: ${$('win-start').value}
 window_stop_date:  ${$('win-end').value}
 
-# step 6: age groups, each up to and including its upper age in years
+` + (age ? `# step 6: age groups, each up to and including its upper age in years
 age_groups: {${ages.map(([n, a]) => `${n}: ${a}`).join(', ')}}
-` + FIXED_RULES.replace('${FIRST_AGE}', ages.length ? ages[0][0] : '_UNKNOWN_').replace('${NODATE_STEP}', nodateStep()).replace('${SELECTION_STEPS}', selectionSteps());
+` : `# step 6: no age groups, since step 2 matches no date-of-birth column
+`) + fixedRules(size, age, ages.length ? ages[0][0] : '_UNKNOWN_');
 }
 
 function isoOf(v) {
@@ -1543,7 +1556,8 @@ function buildGroupBy() {
   const cols = parseCSV(prepared, 1)[0].filter(c => !CORE_COLUMNS.includes(c));
   const sel = $('group-by'), keep = wantGroup || sel.value;
   wantGroup = null;
-  sel.innerHTML = cols.map(c => `<option value="${esc(c)}">${esc(GROUP_LABELS[c] || c)}</option>`).join('');
+  sel.innerHTML = cols.length ? cols.map(c => `<option value="${esc(c)}">${esc(GROUP_LABELS[c] || c)}</option>`).join('') :
+    '<option value="">(nothing: the export has no size or date of birth)</option>';
   sel.value = cols.includes(keep) ? keep : cols.includes('age_group') ? 'age_group' : (cols[0] || '');
 }
 
@@ -1602,7 +1616,6 @@ $('run-btn').onclick = async () => {
   if (!ownSettings && intakeCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the intake groups first.'; return; }
   if (!ownSettings && periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
   if (horizonCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the analysis horizon first.'; return; }
-  if (!ownSettings && !group) { st.className = 'status bad'; st.textContent = 'The prepared data has no column to compare animals by.'; return; }
   if (!ownSettings && groupLevels.length > GROUP_CAP) {
     st.className = 'status bad';
     st.textContent = `This tool compares at most ${GROUP_CAP} groups, and ${group} has ${groupLevels.length}: ${groupLevels.map(x => x[0]).join(', ')}. Merge some of them, or compare by a different column.`;
@@ -1616,7 +1629,8 @@ $('run-btn').onclick = async () => {
   const out = '/out_' + (++runNo);
   const template = await (await fetch('mlos_settings_template.yaml')).text();
   const settingsText = ownSettings ? ownSettings.effective : withAnswers(
-    template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml())
+    // With no column to compare animals by, mLOS skips that comparison.
+    (group ? template.replace('__GROUP__', group) : template.replace('animal_group_columns:\n  - __GROUP__\n', '')).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml())
       .replace('__CAP__', capValue()).replace('__PLOTCAP__', +$('plot-cap').value).replace('__REFERENCES__', referencesYaml()),
     settingsAnswers(group));
   window.demo.settingsYaml = settingsText;

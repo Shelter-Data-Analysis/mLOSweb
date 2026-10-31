@@ -10,7 +10,7 @@ is the page in web/ plus:
     mlos/      the mLOS scripts the run sources, and the deck builder mlos_review
     wheels/    the deck builder's Python packages that Pyodide does not carry
     sdp/       the ShelterDataPrep package
-    data/      the demo export, uncompressed
+    data/      the demo exports, uncompressed
     manifest.json  the versions and file lists the page reads at startup
 
 Python 3.9 or later, standard library only.
@@ -142,14 +142,19 @@ def wheels() -> list[str]:
     return names
 
 
-def demo_data() -> None:
-    data = gzip.decompress(fetch(pins.DEMO_URL, "MV_raw.csv.gz"))
-    digest = hashlib.sha256(data).hexdigest()
-    if digest != pins.DEMO_SHA256:
-        sys.exit("The demo export's checksum is {0}, not {1} as pins.py states. "
-                 "Delete .cache/MV_raw.csv.gz and build again; if it persists, "
-                 "the deposit has changed.".format(digest, pins.DEMO_SHA256))
-    write(SITE / "data" / "mission_viejo_export.csv", data)
+def demo_data() -> list[dict]:
+    demos = []
+    for demo in pins.DEMOS:
+        name = demo["url"].split("/files/", 1)[1].split("?", 1)[0]
+        data = gzip.decompress(fetch(demo["url"], name))
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != demo["sha256"]:
+            sys.exit("The demo export {0} has checksum {1}, not {2} as pins.py "
+                     "states. Delete .cache/{0} and build again; if it persists, "
+                     "the deposit has changed.".format(name, digest, demo["sha256"]))
+        write(SITE / "data" / demo["file"], data)
+        demos.append({"file": demo["file"], "label": demo["label"]})
+    return demos
 
 
 def main() -> None:
@@ -165,7 +170,7 @@ def main() -> None:
     webr()
     r_packages()
     wheel_files = wheels()
-    demo_data()
+    demos = demo_data()
     manifest = {
         "mlos": {"version": mlos_version, "commit": pins.MLOS_REF, "files": mlos_files,
                  "review_files": review_files},
@@ -174,6 +179,7 @@ def main() -> None:
         "pyodide": pins.PYODIDE_VERSION,
         "r_packages": [f[:-len(".tgz")] for f in pins.R_PACKAGES],
         "wheels": wheel_files,
+        "demos": demos,
     }
     write(SITE / "manifest.json", (json.dumps(manifest, indent=2) + "\n").encode())
     size = sum(p.stat().st_size for p in SITE.rglob("*") if p.is_file())
