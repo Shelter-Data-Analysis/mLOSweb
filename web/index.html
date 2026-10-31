@@ -41,6 +41,8 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
 .deck-tables h4 { margin:0 0 4px; font-size:14px; }
 .deck-tables td.num { white-space:nowrap; }
 .flag { font-size:10px; color:var(--accent); font-weight:600; margin-left:3px; }
+.file-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.file-row button { padding:3px 10px; font-size:13px; }
 .tnote { font-size:12px; color:var(--muted); font-style:italic; margin:4px 0 0; max-width:80ch; }
 </style>
 </head>
@@ -66,9 +68,9 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
       <p class="help">Either file, or both, can stand in for the steps it covers: a configuration for steps 2 to 6, a settings file for the choices in step 8. Each runs as written, except for the changes the page lists, so a file this page wrote, or one prepared by hand for the programs on your own computer, gives the same results here.</p>
       <div class="grid2">
         <label for="cfg-input">ShelterDataPrep configuration</label>
-        <span><input type="file" id="cfg-input" accept=".yaml,.yml"> <button class="secondary" id="cfg-drop" hidden>Stop using it</button></span>
+        <span class="file-row"><input type="file" id="cfg-input" accept=".yaml,.yml"><button class="secondary" id="cfg-drop" hidden>Stop using it</button></span>
         <label for="set-input">mLOS settings file</label>
-        <span><input type="file" id="set-input" accept=".yaml,.yml"> <button class="secondary" id="set-drop" hidden>Stop using it</button></span>
+        <span class="file-row"><input type="file" id="set-input" accept=".yaml,.yml"><button class="secondary" id="set-drop" hidden>Stop using it</button></span>
       </div>
       <p class="status" id="cfg-status"></p>
       <p class="status" id="set-status"></p>
