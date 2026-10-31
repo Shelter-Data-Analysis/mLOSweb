@@ -472,7 +472,8 @@ function configYaml() {
   const m = mapping();
   const ages = ageGroups();
   const cols = FIELDS.filter(f => m[f.key]).map(f => `  ${f.key}: ${JSON.stringify(m[f.key])}`).join('\n');
-  return `# Written by the demo page from steps 2 to 6.
+  return `# Written by mLOS Web from steps 2 to 6. source_dir and dest_dir are the
+# page's own folders; change them to run this file on your computer.
 source_dir:  "/work"
 source_file: "export.csv"
 date_format: ${JSON.stringify(dateFormat)}
@@ -534,7 +535,7 @@ function refresh(rebuildDates = true) {
 }
 
 // ---------- step 5: run ShelterDataPrep ----------
-let prepared = null;
+let prepared = null, preparedConfig = null;
 $('prep-btn').onclick = async () => {
   const st = $('s5-status');
   if (animalsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose the species in step 3 first.'; return; }
@@ -546,7 +547,8 @@ $('prep-btn').onclick = async () => {
   try {
     py.FS.mkdirTree('/work/out');
     py.FS.writeFile('/work/export.csv', exportText);
-    py.FS.writeFile('/work/config.yaml', configYaml());
+    preparedConfig = configYaml();
+    py.FS.writeFile('/work/config.yaml', preparedConfig);
     const report = py.runPython(`
 import io, contextlib
 from shelterprep import load, Prep
@@ -617,7 +619,7 @@ function showPrep(stats, preparedText, statsText) {
   const links = document.createElement('p'); links.className = 'help';
   links.append('Save: ', fileLink('prepared.csv', preparedText, 'text/csv', 'the prepared data'), ', ',
                fileLink('prepared_stats.csv', statsText, 'text/csv', 'the full step table'), ', ',
-               fileLink('shelterprep_config.yaml', configYaml(), 'text/yaml', 'the configuration file'), '.');
+               fileLink('shelterprep_config.yaml', preparedConfig, 'text/yaml', 'the configuration file'), '.');
   wrap.append(flex, links);
   window.demo.preparedRows = rowsP.length - 1;
   window.demo.ageCounts = Object.fromEntries(ages);
@@ -878,6 +880,11 @@ async function showRun(out, group) {
   try {
     names = await (await sh.evalR(`list.files('${out}')`)).toArray();
     await sh.evalR(`zip::zip('/tmp/mlos_results.zip', files = list.files('${out}'), root = '${out}')`);
+    // The two files the run was made from go into the zip beside its outputs.
+    await webR.FS.mkdir('/tmp/inputs_' + runNo);
+    await webR.FS.writeFile(`/tmp/inputs_${runNo}/shelterprep_config.yaml`, new TextEncoder().encode(preparedConfig));
+    await webR.FS.writeFile(`/tmp/inputs_${runNo}/mlos_settings.yaml`, new TextEncoder().encode(window.demo.settingsYaml));
+    await sh.evalR(`zip::zip_append('/tmp/mlos_results.zip', files = c('shelterprep_config.yaml', 'mlos_settings.yaml'), root = '/tmp/inputs_${runNo}')`);
   } finally { sh.purge(); }
   window.demo.outputs = names;
   window.demo.outputDir = out;
@@ -895,7 +902,9 @@ async function showRun(out, group) {
   const wrap = $('run-results');
   const intro = document.createElement('p'); intro.className = 'help';
   intro.append(`${names.length} files were written: ${pngs.length} plots, each with a CSV of its numbers, plus the Excel workbook, results.json, and the log. `,
-               fileLink('mlos_results.zip', zipBytes, 'application/zip', `Download all ${names.length} files (zip, ${(zipBytes.length / 1e6).toFixed(1)} MB)`), '.');
+               fileLink('mlos_results.zip', zipBytes, 'application/zip', `Download all ${names.length} files (zip, ${(zipBytes.length / 1e6).toFixed(1)} MB)`),
+               ', with the ShelterDataPrep configuration and the mLOS settings file this run was made from. Save the settings file alone: ',
+               fileLink('mlos_settings.yaml', window.demo.settingsYaml, 'text/yaml', 'mlos_settings.yaml'), '.');
   const grid = document.createElement('div'); grid.className = 'plots';
   const draw = () => {
     grid.replaceChildren();
