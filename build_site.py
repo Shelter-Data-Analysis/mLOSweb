@@ -7,7 +7,8 @@ is the page in web/ plus:
 
     webr/      the webR runtime
     repo/      the R packages, laid out as a webR package repository
-    mlos/      the mLOS scripts the run sources
+    mlos/      the mLOS scripts the run sources, and the deck builder mlos_review
+    wheels/    the deck builder's Python packages that Pyodide does not carry
     sdp/       the ShelterDataPrep package
     data/      the demo export, uncompressed
     manifest.json  the versions and file lists the page reads at startup
@@ -70,7 +71,7 @@ def strip_top(files: dict[str, bytes]) -> dict[str, bytes]:
     return {name.split("/", 1)[1]: data for name, data in files.items() if "/" in name}
 
 
-def mlos() -> tuple[list[str], str]:
+def mlos() -> tuple[list[str], list[str], str]:
     files = strip_top(tar_members(fetch(GITHUB.format("mLOS", pins.MLOS_REF),
                                         "mLOS-{0}.tar.gz".format(pins.MLOS_REF))))
     runner = files["mlos_run_complete.R"].decode()
@@ -78,8 +79,13 @@ def mlos() -> tuple[list[str], str]:
     names = sourced + ["mlos_run_complete.R"]
     for name in names:
         write(SITE / "mlos" / name, files[name])
+    # The deck builder: its modules, and the files it opens beside them.
+    review = sorted(name for name in files
+                    if re.fullmatch(r"mlos_review/[a-z_]+\.(py|png|svg)", name))
+    for name in review:
+        write(SITE / "mlos" / name, files[name])
     version = re.search(r'^MLOS_VERSION\s*<-\s*"([^"]+)"', files["mlos_common.R"].decode(), flags=re.M)
-    return names, version.group(1)
+    return names, review, version.group(1)
 
 
 def shelterprep() -> tuple[list[str], str]:
@@ -122,6 +128,20 @@ def r_packages() -> None:
     write(target / "PACKAGES", ("\n\n".join(blocks[f] for f in pins.R_PACKAGES) + "\n").encode())
 
 
+def wheels() -> list[str]:
+    names = []
+    for url, sha256 in pins.PYPI_WHEELS:
+        name = url.rsplit("/", 1)[1]
+        data = fetch(url, name)
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != sha256:
+            sys.exit("{0} has checksum {1}, not {2} as pins.py states. Delete "
+                     ".cache/{0} and build again.".format(name, digest, sha256))
+        write(SITE / "wheels" / name, data)
+        names.append(name)
+    return names
+
+
 def demo_data() -> None:
     data = gzip.decompress(fetch(pins.DEMO_URL, "MV_raw.csv.gz"))
     digest = hashlib.sha256(data).hexdigest()
@@ -140,17 +160,20 @@ def main() -> None:
         if source.suffix == ".html":
             text = text.replace(b"{{PYODIDE_VERSION}}", pins.PYODIDE_VERSION.encode())
         write(SITE / source.name, text)
-    mlos_files, mlos_version = mlos()
+    mlos_files, review_files, mlos_version = mlos()
     sdp_files, sdp_version = shelterprep()
     webr()
     r_packages()
+    wheel_files = wheels()
     demo_data()
     manifest = {
-        "mlos": {"version": mlos_version, "commit": pins.MLOS_REF, "files": mlos_files},
+        "mlos": {"version": mlos_version, "commit": pins.MLOS_REF, "files": mlos_files,
+                 "review_files": review_files},
         "shelterprep": {"version": sdp_version, "commit": pins.SDP_REF, "files": sdp_files},
         "webr": pins.WEBR_VERSION,
         "pyodide": pins.PYODIDE_VERSION,
         "r_packages": [f[:-len(".tgz")] for f in pins.R_PACKAGES],
+        "wheels": wheel_files,
     }
     write(SITE / "manifest.json", (json.dumps(manifest, indent=2) + "\n").encode())
     size = sum(p.stat().st_size for p in SITE.rglob("*") if p.is_file())

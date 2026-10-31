@@ -7,8 +7,9 @@ it is fetched, and a download that does not match stops the build.
 
 # The two programs, as commits of their public repositories under
 # github.com/Shelter-Data-Analysis. A release replaces each commit with the
-# release's tag.
-MLOS_REF = "f3bdf618f0e6512fa84394fe09f4b390fd25182d"
+# release's tag. The mLOS commit supplies both the R analysis and the deck
+# builder, mlos_review.
+MLOS_REF = "4a6fdb51320ced17855378242df52dcb1310eb93"
 SDP_REF = "9daa223235c81b0b7c50ba7c7f1aa64a41a1989c"
 
 # webR, the build of R for WebAssembly, from its npm package. Its R version
@@ -34,8 +35,23 @@ R_PACKAGES = [
 ]
 
 # Pyodide, the build of Python for WebAssembly. The page loads it, with pandas
-# and PyYAML, from the jsDelivr content delivery network.
+# and PyYAML, from the jsDelivr content delivery network; the deck builder
+# adds matplotlib, lxml, Pillow, and typing-extensions from the same place.
 PYODIDE_VERSION = "0.29.5"
+
+# The deck builder's pure-Python packages that Pyodide does not carry, as
+# wheels from PyPI with their published SHA-256 checksums. The site serves them
+# itself, and the page installs them without looking up dependencies.
+PYPI_WHEELS = [
+    ("https://files.pythonhosted.org/packages/d9/4f/00be2196329ebbff56ce564aa94efb0fbc828d00de250b1980de1a34ab49/python_pptx-1.0.2-py3-none-any.whl",
+     "160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba"),
+    ("https://files.pythonhosted.org/packages/fa/34/a22e6664211f0c8879521328000bdcae9bf6dbafa94a923e531f6d5b3f73/xlsxwriter-3.2.5-py3-none-any.whl",
+     "4f4824234e1eaf9d95df9a8fe974585ff91d0f5e3d3f12ace5b71e443c1c6abd"),
+    ("https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl",
+     "5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2"),
+    ("https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl",
+     "7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa"),
+]
 
 # The demo export: Mission Viejo Animal Services, deposited as MV_raw.csv.gz in
 # Zenodo record 10.5281/zenodo.22051091. The checksum is of the uncompressed

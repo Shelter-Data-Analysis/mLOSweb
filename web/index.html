@@ -37,6 +37,11 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
 .plots figure { margin:0; font-size:12px; color:var(--muted); }
 .plots img { width:100%; border:1px solid var(--line); border-radius:4px; background:#fff; }
 .runtime { font-size:13px; color:var(--muted); }
+.deck-tables { display:flex; flex-direction:column; gap:18px; }
+.deck-tables h4 { margin:0 0 4px; font-size:14px; }
+.deck-tables td.num { white-space:nowrap; }
+.flag { font-size:10px; color:var(--accent); font-weight:600; margin-left:3px; }
+.tnote { font-size:12px; color:var(--muted); font-style:italic; margin:4px 0 0; max-width:80ch; }
 </style>
 </head>
 <body>
@@ -152,6 +157,16 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <button id="run-btn">Run mLOS</button>
     <p class="status" id="s6-status"></p>
     <div id="run-results"></div>
+  </section>
+
+  <section id="s7" class="locked">
+    <span class="step">Step 9</span>
+    <h2>Build the slide deck and its tables</h2>
+    <p class="help">This step runs a second program, the deck builder mlos_review, which comes with mLOS and reads the analysis results. It writes a PowerPoint deck of findings and a workbook of the tables the deck draws on. On your own computer the same builder runs as <code>python3 -m mlos_review.deck</code>.</p>
+    <label class="help"><input type="checkbox" id="tables-only"> Tables only: skip the slides (faster, and a fallback if building the slides fails)</label>
+    <button id="deck-btn">Build the deck</button>
+    <p class="status" id="s7-status"></p>
+    <div id="deck-results"></div>
   </section>
   <footer class="runtime" id="versions"></footer>
 </main>
@@ -866,6 +881,10 @@ async function showRun(out, group) {
   } finally { sh.purge(); }
   window.demo.outputs = names;
   window.demo.outputDir = out;
+  lastRun = { out, names };
+  $('s7').classList.remove('locked');
+  $('deck-results').replaceChildren();
+  $('s7-status').textContent = '';
   window.demo.webR = webR;
   const pngs = names.filter(n => n.endsWith('.png'));
   const images = {};
@@ -916,6 +935,188 @@ async function showRun(out, group) {
   d.innerHTML = '<summary>Show the mLOS log</summary><pre></pre>';
   d.querySelector('pre').textContent = log;
   wrap.append(d);
+}
+
+// ---------- step 9: deck builder ----------
+// mlos_review runs in the same Python as ShelterDataPrep. Its extra packages
+// load on the first build only, so a visitor who never builds a deck never
+// downloads them. The mLOS outputs are copied from R's file system to Python's.
+let lastRun = null, deckLoaded = null;
+const DEFAULT_TABLES = [['Sample', 0], ['LOS_By_Stratum', 0], ['LOS_By_Stratum', 1], ['LOS_By_Stratum', 2], ['Cox_Pooled', 0]];
+let chosenTables = null;
+
+function loadDeckBuilder() {
+  if (!deckLoaded) deckLoaded = (async () => {
+    const t0 = performance.now();
+    const py = await pyReady;
+    await py.loadPackage(['matplotlib', 'lxml', 'pillow', 'typing-extensions', 'micropip']);
+    py.globals.set('wheel_urls', py.toPy(manifest.wheels.map(w => root + 'wheels/' + w)));
+    await py.runPythonAsync('import micropip\nawait micropip.install(list(wheel_urls), deps=False)');
+    for (const f of manifest.mlos.review_files) {
+      py.FS.mkdirTree('/review/mlos_review');
+      py.FS.writeFile('/review/' + f, new Uint8Array(await (await fetch(root + 'mlos/' + f)).arrayBuffer()));
+    }
+    py.runPython("import sys; sys.path.insert(0, '/review'); import mlos_review.deck");
+    mark('deck builder ready', t0);
+    return py;
+  })();
+  return deckLoaded;
+}
+
+const DECK_PY = `
+import json, shutil, time
+from pathlib import Path
+import pandas as pd
+from mlos_review import deck, workbook
+from mlos_review.blocks import header_text, cell_format
+from mlos_review.render_pptx import _format_cell
+
+shutil.rmtree('/deck', ignore_errors=True)
+Path('/deck').mkdir()
+out = Path('/deck/mlos_deck.pptx')
+error, built = None, 'tables' if tables_only else 'deck'
+t0 = time.time()
+try:
+    deck.build('/results', out, tables_only=tables_only)
+except Exception as e:
+    if tables_only:
+        raise
+    error = '{0}: {1}'.format(type(e).__name__, e)
+    shutil.rmtree('/deck', ignore_errors=True)
+    Path('/deck').mkdir()
+    deck.build('/results', out, tables_only=True)
+    built = 'tables'
+seconds = time.time() - t0
+
+bundle = deck.Bundle.load('/results')
+settings = deck.resolved_settings(bundle, deck.Settings())
+vocab = deck.Vocabulary(bundle.data)
+readings = deck.curve_readings_table(bundle, settings.curve_readings, vocab)
+tables = []
+for sheet in workbook.sheets(bundle, vocab, readings):
+    for k, table in enumerate(sheet.tables):
+        frame = table.df
+        rows = []
+        for key, record in frame.iterrows():
+            parts = key if isinstance(key, tuple) else (key,)
+            cells = []
+            for measure in frame.columns:
+                value = record[measure]
+                if not isinstance(value, str) and pd.isna(value):
+                    value = None
+                flag = ''
+                if table.flags is not None and measure in table.flags.columns and key in table.flags.index:
+                    flag = table.flags.loc[key, measure] or ''
+                spec = cell_format(table, key, measure)
+                # As the workbook does: a value its format would show as zero
+                # (a p-value of 3.7e-06 under four decimals) is shown in full.
+                if isinstance(value, (int, float)) and workbook._rounds_to_zero(float(value), spec):
+                    text = '{0:.3g}'.format(float(value))
+                else:
+                    text = _format_cell(value, spec)
+                cells.append([text, str(flag)])
+            rows.append([[str(p) for p in parts], cells])
+        tables.append({'sheet': sheet.name, 'index': k, 'title': deck.capitalize_first(table.title),
+                       'index_headers': workbook._index_headers(frame),
+                       'headers': [header_text(table, vocab, m, short=False) for m in frame.columns],
+                       'rows': rows, 'notes': list(table.footnotes)})
+json.dumps({'built': built, 'error': error, 'seconds': seconds,
+            'files': sorted(p.name for p in Path('/deck').iterdir() if p.is_file()), 'tables': tables})
+`;
+
+$('deck-btn').onclick = async () => {
+  const st = $('s7-status');
+  $('deck-btn').disabled = true;
+  $('deck-results').replaceChildren();
+  st.className = 'status';
+  st.textContent = deckLoaded ? 'Building...' : 'Loading the deck builder (the first time takes a little longer)...';
+  try {
+    const py = await loadDeckBuilder();
+    st.textContent = 'Building...';
+    py.FS.mkdirTree('/results');
+    for (const f of py.FS.readdir('/results')) if (f !== '.' && f !== '..') py.FS.unlink('/results/' + f);
+    for (const n of lastRun.names) py.FS.writeFile('/results/' + n, await webR.FS.readFile(lastRun.out + '/' + n));
+    const t0 = performance.now();
+    py.globals.set('tables_only', $('tables-only').checked);
+    const result = JSON.parse(py.runPython(DECK_PY));
+    mark('deck', t0);
+    window.demo.deck = result;
+    showDeck(py, result);
+    st.className = result.error ? 'status warn' : 'status ok';
+    st.textContent = result.error
+      ? `The slides could not be built (${result.error}), so the tables were built alone.`
+      : `Built in ${window.demo.timings.deck} s.`;
+  } catch (e) {
+    st.className = 'status bad';
+    const msg = String(e.message || e).split('\n').filter(Boolean);
+    st.textContent = 'The deck builder stopped: ' + (msg.find(l => /Error:/.test(l)) || msg[msg.length - 1]);
+    window.demo.errors.push(String(e));
+  }
+  $('deck-btn').disabled = false;
+};
+
+function showDeck(py, result) {
+  const wrap = $('deck-results');
+  const links = document.createElement('p');
+  links.className = 'help';
+  links.append('Download: ');
+  const files = [['mlos_deck.pptx', 'the slide deck', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+                 ['mlos_deck_tables.xlsx', 'the tables workbook', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']]
+    .filter(([f]) => result.files.includes(f));
+  files.forEach(([f, text, type], k) => {
+    if (k) links.append(', ');
+    links.append(fileLink(f, py.FS.readFile('/deck/' + f), type, text));
+  });
+  links.append('.');
+  wrap.append(links);
+
+  const all = result.tables;
+  const id = (t) => t.sheet + '#' + t.index;
+  if (!chosenTables) chosenTables = DEFAULT_TABLES.map(([s, i]) => s + '#' + i);
+  const box = document.createElement('div');
+  box.className = 'deck-tables';
+  const draw = () => {
+    box.replaceChildren();
+    for (const t of all.filter(t => chosenTables.includes(id(t)))) box.append(tableElement(t));
+    window.demo.shownTables = chosenTables.filter(c => all.some(t => id(t) === c));
+  };
+  const pick = document.createElement('details');
+  pick.innerHTML = `<summary>Choose which tables to show (${all.length} in the workbook)</summary>`;
+  const list = document.createElement('div');
+  list.style.cssText = 'columns: 2 300px; font-size:13px; margin-top:8px';
+  all.forEach((t, k) => {
+    const lab = document.createElement('label');
+    lab.style.display = 'block';
+    lab.innerHTML = `<input type="checkbox" id="table-${k}" ${chosenTables.includes(id(t)) ? 'checked' : ''}> ${esc(t.sheet)}: ${esc(t.title)}`;
+    lab.querySelector('input').onchange = (e) => {
+      chosenTables = e.target.checked ? [...chosenTables, id(t)] : chosenTables.filter(x => x !== id(t));
+      draw();
+    };
+    list.append(lab);
+  });
+  const reset = document.createElement('button');
+  reset.className = 'secondary'; reset.textContent = 'Back to the default tables'; reset.style.marginTop = '8px';
+  reset.onclick = () => {
+    chosenTables = DEFAULT_TABLES.map(([s, i]) => s + '#' + i);
+    list.querySelectorAll('input').forEach((i, k) => i.checked = chosenTables.includes(id(all[k])));
+    draw();
+  };
+  pick.append(list, reset);
+  const legend = document.createElement('p');
+  legend.className = 'help';
+  legend.textContent = 'A small H, L, or F beside a number is the deck’s own mark: the highest level, the lowest, or a column where every level is the same.';
+  draw();
+  wrap.append(pick, legend, box);
+}
+
+function tableElement(t) {
+  const div = document.createElement('div');
+  const head = t.index_headers.map(h => `<th>${esc(h)}</th>`).join('') + t.headers.map(h => `<th class="num">${esc(h)}</th>`).join('');
+  const body = t.rows.map(([parts, cells]) => '<tr>' + parts.map(p => `<td>${esc(p)}</td>`).join('') +
+    cells.map(([v, f]) => `<td class="num">${esc(v)}${f ? `<span class="flag">${esc(f)}</span>` : ''}</td>`).join('') + '</tr>').join('');
+  div.innerHTML = `<h4>${esc(t.sheet)}: ${esc(t.title)}</h4><div class="scroll"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>` +
+    t.notes.map(n => `<p class="tnote">${esc(n)}</p>`).join('');
+  return div;
 }
 </script>
 </body>
