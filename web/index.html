@@ -268,6 +268,12 @@ function loadText(name, text) {
   buildAnimals();
   $('s5').classList.remove('locked');
   buildAges();
+  if (pendingConfigAnswers) {
+    const { name: n, answers } = pendingConfigAnswers;
+    pendingConfigAnswers = null;
+    try { restoreConfig(answers); $('cfg-status').textContent = `Filled in steps 2 to 6 from ${n}. Change any answer there, then prepare the data.`; }
+    catch (err) { $('cfg-status').className = 'status bad'; $('cfg-status').textContent = `${n} cannot be used: ${err.message}.`; }
+  }
   applyFiles(true);
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -330,6 +336,73 @@ function applyFiles(rebuildDates = false) {
   $('config-yaml').textContent = ownConfig ? ownConfig.text : (header.length ? configYaml() : '');
   refresh(rebuildDates);
 }
+// The page's own files end with its form answers, so loading one back fills
+// in the forms. A checksum of the rest of the file says whether it was edited
+// since the page wrote it; an edited file runs as written instead.
+const ANSWERS_MARK = '# mLOS Web form answers';
+let pendingConfigAnswers = null, pendingLabels = null, wantGroup = null;
+function checksum(text) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
+}
+function withAnswers(text, answers) {
+  const body = text.endsWith('\n') ? text : text + '\n';
+  return body + `${ANSWERS_MARK}, read back when this file is loaded on the page.\n` +
+    '# After an edit to the lines above, the page runs the file as written instead.\n' +
+    `# ${JSON.stringify({ checksum: checksum(body), answers })}\n`;
+}
+function readAnswers(text) {
+  const t = text.replace(/\r\n/g, '\n'), i = t.indexOf('\n' + ANSWERS_MARK);
+  if (i < 0) return null;
+  try {
+    const j = JSON.parse(t.slice(i + 1).split('\n').filter(Boolean).pop().replace(/^# /, ''));
+    return { edited: j.checksum !== checksum(t.slice(0, i + 1)), answers: j.answers };
+  } catch (e) { return null; }
+}
+function configAnswers() {
+  return { mapping: mapping(), species: [$('species-col').value, $('species-val').value],
+           notStay: notStay.filter(r => r.col).map(r => ({ col: r.col, values: [...r.values] })),
+           dateFormat, window: [$('win-start').value, $('win-end').value], ages: ageGroups() };
+}
+function restoreConfig(a) {
+  const named = [...Object.values(a.mapping), a.species[0], ...a.notStay.map(r => r.col)].filter(Boolean);
+  const missing = [...new Set(named.filter(c => !header.includes(c)))];
+  if (missing.length) throw new Error(`this export has no column named ${missing.join(', ')}`);
+  for (const f of FIELDS) $('map-' + f.key).value = a.mapping[f.key] || '';
+  $('species-col').value = a.species[0];
+  buildSpeciesValues();
+  $('species-val').value = a.species[1];
+  notStay = a.notStay.length ? a.notStay.map(r => ({ col: r.col, values: new Set(r.values) })) : [{ col: '', values: new Set() }];
+  drawNotStay();
+  dateFormat = a.dateFormat;
+  $('win-start').value = a.window[0];
+  $('win-end').value = a.window[1];
+  DEFAULT_AGES.forEach((_, k) => {
+    const g = a.ages[k];
+    $('age-name-' + k).value = g ? g[0] : '';
+    $('age-max-' + k).value = g ? g[1] : '';
+  });
+  animalsCheck();
+}
+function settingsAnswers(group) {
+  return { outcomes: outcomeChoice, intakes: intakeChoice, dividers: [0, 1, 2].map(k => $('div-' + k).value),
+           labels: periodLabels(), group };
+}
+function restoreSettings(a) {
+  outcomeChoice = { ...a.outcomes };
+  intakeChoice = JSON.parse(JSON.stringify(a.intakes));
+  [0, 1, 2].forEach(k => $('div-' + k).value = a.dividers[k] || '');
+  pendingLabels = a.labels;
+  wantGroup = a.group;
+  if (prepared) { buildOutcomes(); buildIntakes(); buildGroupBy(); }
+}
+
 $('cfg-input').onchange = async (e) => {
   const f = e.target.files[0];
   if (!f) return;
@@ -337,6 +410,24 @@ $('cfg-input').onchange = async (e) => {
   const st = $('cfg-status');
   st.className = 'status'; st.textContent = `Reading ${f.name}...`;
   const text = await f.text();
+  const ans = readAnswers(text);
+  if (ans && !ans.edited) {
+    try {
+      ownConfig = null;
+      forgetPrepared('A configuration was loaded.');
+      if (header.length) {
+        restoreConfig(ans.answers);
+        st.className = 'status ok'; st.textContent = `Filled in steps 2 to 6 from ${f.name}. Change any answer there, then prepare the data.`;
+      } else {
+        pendingConfigAnswers = { name: f.name, answers: ans.answers };
+        st.className = 'status ok'; st.textContent = `Steps 2 to 6 are filled in from ${f.name} once the export is loaded.`;
+      }
+    } catch (err) {
+      st.className = 'status bad'; st.textContent = `${f.name} cannot be used: ${err.message}.`;
+    }
+    applyFiles(true);
+    return;
+  }
   const py = await pyReady;
   py.FS.mkdirTree('/work');
   py.FS.writeFile('/work/upload_config.yaml', text);
@@ -357,7 +448,8 @@ json.dumps({'start': None if s.window_start_date is None else str(s.window_start
       'It writes the prepared data inside this page, not to its dest_dir.',
       'The page cannot check that it studies one species: its own steps have to remove the others, as step 3 does.',
     ] };
-    st.className = 'status ok'; st.textContent = `Using ${f.name} for steps 2 to 6, with the study window ${info.start} to ${info.stop}.`;
+    st.className = 'status ok'; st.textContent = `Using ${f.name} for steps 2 to 6, with the study window ${info.start} to ${info.stop}.` +
+      (ans ? ' It was edited after the page wrote it, so it runs as written rather than filling in the steps.' : '');
     forgetPrepared('A configuration was loaded.');
   } catch (err) {
     st.className = 'status bad';
@@ -380,6 +472,14 @@ $('set-input').onchange = async (e) => {
   const st = $('set-status');
   st.className = 'status'; st.textContent = `Reading ${f.name}...`;
   const text = await f.text();
+  const ans = readAnswers(text);
+  if (ans && !ans.edited) {
+    ownSettings = null;
+    restoreSettings(ans.answers);
+    st.className = 'status ok'; st.textContent = `Filled in the choices in step 8 from ${f.name}. Change any of them there, then run.`;
+    applyFiles();
+    return;
+  }
   const py = await pyReady;
   py.FS.mkdirTree('/work');
   py.FS.writeFile('/work/upload_settings.yaml', text);
@@ -414,7 +514,8 @@ json.dumps({k: raw.get(k) for k in ${JSON.stringify(FORCED_OFF.map(x => x[0]))}}
       })`);
     } finally { sh.purge(); }
     ownSettings = { name: f.name, text, effective, changes };
-    st.className = 'status ok'; st.textContent = `Using ${f.name} for the choices in step 8.`;
+    st.className = 'status ok'; st.textContent = `Using ${f.name} for the choices in step 8.` +
+      (ans ? ' It was edited after the page wrote it, so it runs as written rather than filling in the choices.' : '');
   } catch (err) {
     st.className = 'status bad';
     st.textContent = `${f.name} cannot be used: ${otherKind(text, 'settings')}${err instanceof Error && !err.type ? rError(err) : pyError(err)}`;
@@ -631,7 +732,8 @@ ${'${SELECTION_STEPS}'}${'${NODATE_STEP}'}  - map:
   - dedup:
     where: {night_sign: "1"}
 `;
-function configYaml() {
+function configYaml() { return withAnswers(configBody(), configAnswers()); }
+function configBody() {
   const m = mapping();
   const ages = ageGroups();
   const cols = FIELDS.filter(f => m[f.key]).map(f => `  ${f.key}: ${JSON.stringify(m[f.key])}`).join('\n');
@@ -963,13 +1065,15 @@ function buildPeriods() {
   periods.forEach((p, k) => {
     const y0 = p.from.slice(0, 4), y1 = addDay(p.stop, -1).slice(0, 4);
     const auto = y0 === y1 ? y0 : `${y0}-${y1}`;
-    const value = labelEdited[k] && prev[k] != null ? prev[k] : auto;
+    if (pendingLabels && pendingLabels[k] != null) labelEdited[k] = true;
+    const value = pendingLabels && pendingLabels[k] != null ? pendingLabels[k] : labelEdited[k] && prev[k] != null ? prev[k] : auto;
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${k + 1}</td><td>${p.from}</td><td>${p.stop}</td><td><input type="text" id="plabel-${k}" value="${esc(value)}" aria-label="Name of period ${k + 1}"></td>`;
     tr.querySelector('input').oninput = () => { labelEdited[k] = true; periodCheck(); };
     body.append(tr);
   });
   t.append(body);
+  pendingLabels = null;
   window.demo.periodProblems = problems;
   periodCheck();
 }
@@ -1007,7 +1111,8 @@ const CORE_COLUMNS = ['animal_id', 'intake_date', 'outcome_date', 'outcome_type'
 const GROUP_LABELS = { age_group: 'age group', animal_size: 'size' };
 function buildGroupBy() {
   const cols = parseCSV(prepared, 1)[0].filter(c => !CORE_COLUMNS.includes(c));
-  const sel = $('group-by'), keep = sel.value;
+  const sel = $('group-by'), keep = wantGroup || sel.value;
+  wantGroup = null;
   sel.innerHTML = cols.map(c => `<option value="${esc(c)}">${esc(GROUP_LABELS[c] || c)}</option>`).join('');
   sel.value = cols.includes(keep) ? keep : cols.includes('age_group') ? 'age_group' : (cols[0] || '');
 }
@@ -1037,8 +1142,9 @@ $('run-btn').onclick = async () => {
   st.textContent = 'Running mLOS (keep this tab in front)...';
   const out = '/out_' + (++runNo);
   const template = await (await fetch('mlos_settings_template.yaml')).text();
-  const settingsText = ownSettings ? ownSettings.effective :
-    template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml());
+  const settingsText = ownSettings ? ownSettings.effective : withAnswers(
+    template.replace('__GROUP__', group).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml()),
+    settingsAnswers(group));
   window.demo.settingsYaml = settingsText;
   await webR.FS.writeFile('/mlos/settings.yaml', new TextEncoder().encode(settingsText));
   await webR.FS.writeFile('/mlos/prepared.csv', new TextEncoder().encode(prepared));
