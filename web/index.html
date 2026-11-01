@@ -101,6 +101,9 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <div id="notstay-rules" style="display:flex; flex-direction:column; gap:10px"></div>
     <button class="secondary" id="notstay-add">Add another column</button>
     <p class="status" id="s2b-note"></p>
+    <h3 style="margin:8px 0 0; font-size:15px">Columns to compare animals by</h3>
+    <p class="help">Tick the columns the prepared data should carry. The analysis can compare groups of animals by any one of them, chosen in step 8 and changed there without preparing the data again. Listed are the export's columns with 2 to 20 different values, and the age group made in step 6 from the date of birth.</p>
+    <div class="help" id="carry-cols" style="columns: 2 240px"></div>
   </section>
 
   <section id="s3" class="locked">
@@ -169,10 +172,15 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     </div>
     <div class="scroll"><table id="period-table"></table></div>
     <p class="status" id="period-note"></p>
+    <h3 style="margin:8px 0 0; font-size:15px">Group the animals</h3>
+    <p class="help">Choose one of the columns carried from step 3 to compare animals by. Each of its values, with its number of stays, gets a group name; values with the same name are combined into one group. Up to six groups. Tick "Leave out" to study only the other animals.</p>
     <div class="grid2">
       <label for="group-by">Compare animals by</label>
       <select id="group-by"></select>
     </div>
+    <div class="scroll"><table id="group-table"></table></div>
+    <datalist id="animal-groups"></datalist>
+    <p class="status" id="group-note"></p>
     <h3 style="margin:8px 0 0; font-size:15px">Set the analysis horizon</h3>
     <p class="help">The longest stay the analysis follows (<code>restricted_stay_cap</code>). A stay that reaches it counts as in care up to that day, and nothing after it is used. Too low, and real long stays are cut short; too high, and a few mistaken records can dominate the averages. Start at 365 days, then check the fraction still in care at the horizon, which the results report after the run.</p>
     <div class="grid2">
@@ -580,7 +588,8 @@ function readAnswers(text) {
 function configAnswers() {
   return { mapping: mapping(), species: [$('species-col').value, $('species-val').value],
            notStay: notStay.filter(r => r.col).map(r => ({ col: r.col, values: [...r.values] })),
-           dateFormat, window: [$('win-start').value, $('win-end').value], ages: ageGroups() };
+           dateFormat, window: [$('win-start').value, $('win-end').value], ages: ageGroups(),
+           carried: [...(carried || [])] };
 }
 function restoreConfig(a) {
   const named = [...Object.values(a.mapping), a.species[0], ...a.notStay.map(r => r.col)].filter(Boolean);
@@ -592,6 +601,8 @@ function restoreConfig(a) {
   $('species-val').value = a.species[1];
   notStay = a.notStay.length ? a.notStay.map(r => ({ col: r.col, values: new Set(r.values) })) : [{ col: '', values: new Set() }];
   drawNotStay();
+  carried = a.carried ? new Set(a.carried) : null;
+  drawCarry();
   dateFormat = a.dateFormat;
   $('win-start').value = a.window[0];
   $('win-end').value = a.window[1];
@@ -605,7 +616,7 @@ function restoreConfig(a) {
 }
 function settingsAnswers(group) {
   return { outcomes: outcomeChoice, intakes: intakeChoice, dividers: [0, 1, 2].map(k => $('div-' + k).value),
-           labels: periodLabels(), group, cap: capValue(), plotCap: +$('plot-cap').value,
+           labels: periodLabels(), group, groups: groupChoice, cap: capValue(), plotCap: +$('plot-cap').value,
            references: { intake: $('ref-intake').value, group: $('ref-group').value } };
 }
 function restoreSettings(a) {
@@ -615,6 +626,7 @@ function restoreSettings(a) {
   dividersSet = 'file';
   pendingLabels = a.labels;
   wantGroup = a.group;
+  groupChoice = JSON.parse(JSON.stringify(a.groups || {}));
   $('cap').value = a.cap || 365;
   $('plot-cap').value = a.plotCap || 58;
   wantRefs = a.references || { intake: '', group: '' };
@@ -794,7 +806,7 @@ const FIELDS = [
   { key: 'outcome_date', label: 'Outcome date', hints: ['outdate', 'outcome_date', 'outcome date', 'out date'] },
   { key: 'intake_type', label: 'Intake type', hints: ['intype', 'intake_type', 'intake type'] },
   { key: 'outcome_type', label: 'Outcome type', hints: ['outtype', 'outcome_type', 'outcome type'] },
-  { key: 'animal_size', label: 'Size', hints: ['petsize', 'animal_size', 'size'] },
+  { key: 'animal_size', label: 'Size (optional, for the size-label rules)', hints: ['petsize', 'animal_size', 'size'] },
   { key: 'dob', label: 'Date of birth', hints: ['petdob', 'dob', 'date of birth', 'birth date'] },
 ];
 function buildMapping() {
@@ -805,7 +817,7 @@ function buildMapping() {
     sel.innerHTML = '<option value="">(choose)</option>' + header.map(h => `<option>${esc(h)}</option>`).join('');
     const guess = header.find(h => f.hints.includes(h.toLowerCase()));
     if (guess) sel.value = guess;
-    sel.onchange = refresh;
+    sel.onchange = () => { drawCarry(); refresh(); };
     g.append(lab, sel);
   }
 }
@@ -842,12 +854,51 @@ function columnOptions(selected, none) {
 function buildAnimals() {
   const guess = header.find(h => /animal.?type|species/i.test(h)) || '';
   $('species-col').innerHTML = columnOptions(guess, '(choose)');
-  $('species-col').onchange = () => { buildSpeciesValues(); drawNotStay(); animalsCheck(); };
+  $('species-col').onchange = () => { buildSpeciesValues(); drawNotStay(); drawCarry(); animalsCheck(); };
   buildSpeciesValues();
   notStay = [{ col: '', values: new Set() }];
   drawNotStay();
   $('notstay-add').onclick = () => { if (notStay.length < NOTSTAY_RULES_MAX) { notStay.push({ col: '', values: new Set() }); drawNotStay(); } };
+  carried = null;
+  drawCarry();
   animalsCheck();
+}
+// The columns the prepared data carries for the analysis to group animals by:
+// any column of the export with 2 to CARRY_MAX values, other than those
+// step 2 matches to a field every analysis reads and the species column, and
+// the age group. The size column and the age group are ticked to start with.
+const CARRY_MAX = 20;
+let carried = null;
+function carryCandidates() {
+  const m = mapping(), skip = new Set([m.animal_id, m.intake_date, m.outcome_date, m.intake_type, m.outcome_type, m.dob, $('species-col').value]);
+  const out = header.filter(h => h && !skip.has(h)).map(h => ({ col: h, n: valueCounts(h, false).length }))
+    .filter(c => c.n >= 2 && c.n <= CARRY_MAX).map(c => ({ ...c, label: `${c.col} (${c.n} values)` }));
+  if (m.dob) out.push({ col: 'age_group', label: 'age group, from the date of birth (step 6)' });
+  return out;
+}
+function drawCarry() {
+  const m = mapping(), cands = carryCandidates();
+  if (!carried) carried = new Set(cands.map(c => c.col).filter(c => c === m.animal_size || c === 'age_group'));
+  const box = $('carry-cols');
+  box.replaceChildren();
+  if (!cands.length) { box.textContent = 'This export has no column with 2 to 20 values to compare animals by.'; return; }
+  cands.forEach((c, k) => {
+    const lab = document.createElement('label');
+    lab.style.display = 'block';
+    lab.innerHTML = `<input type="checkbox" id="carry-${k}" ${carried.has(c.col) ? 'checked' : ''}> ${esc(c.label)}`;
+    lab.querySelector('input').onchange = (e) => {
+      e.target.checked ? carried.add(c.col) : carried.delete(c.col);
+      forgetPrepared('The columns to compare animals by changed.');
+      refresh(false);
+    };
+    box.append(lab);
+  });
+}
+// The carried columns as the prepared data names them: the size column as
+// animal_size, the others by their own names.
+function carriedColumns(age) {
+  const m = mapping(), names = new Set(carryCandidates().map(c => c.col));
+  return [...(carried || [])].filter(c => names.has(c) && (c !== 'age_group' || age)).map(c => c === m.animal_size ? 'animal_size' : c);
 }
 function buildSpeciesValues() {
   const counts = valueCounts($('species-col').value, false);
@@ -1005,7 +1056,8 @@ function configBody() {
   const ages = ageGroups(), size = !!m.animal_size, age = !!m.dob && ages.length > 0;
   // A column the steps name, unmatched in step 2, whose heading the page
   // moved, is mapped too, so ShelterDataPrep finds it under the heading.
-  const stepCols = [$('species-col').value, ...notStay.filter(r => r.col && r.values.size).map(r => r.col)];
+  const extra = carriedColumns(age).filter(c => c !== 'animal_size' && c !== 'age_group');
+  const stepCols = [$('species-col').value, ...notStay.filter(r => r.col && r.values.size).map(r => r.col), ...extra];
   const moved = [...new Set(stepCols.filter(c => c && stepKey(c) === c && fileName(c) !== c))];
   const cols = [...FIELDS.filter(f => m[f.key]).map(f => `  ${f.key}: ${JSON.stringify(fileName(m[f.key]))}`),
                 ...moved.map(c => `  ${JSON.stringify(c)}: ${JSON.stringify(fileName(c))}`)].join('\n');
@@ -1016,7 +1068,7 @@ source_file: ${JSON.stringify(exportSource.file)}
 ${exportSource.sheet === null ? '' : `sheet:       ${JSON.stringify(exportSource.sheet)}\n`}date_format: ${JSON.stringify(dateFormat)}
 dest_dir:    "/work/out"
 dest_file:   "prepared.csv"
-output_columns: [${['animal_id', 'intake_date', 'outcome_date', 'outcome_type', 'intake_type', ...(size ? ['animal_size'] : []), ...(age ? ['age_group'] : [])].join(', ')}]
+output_columns: [${['animal_id', 'intake_date', 'outcome_date', 'outcome_type', 'intake_type', ...carriedColumns(age)].map(yamlName).join(', ')}]
 
 # step 2: the export's column for each piece of information
 columns:
@@ -1326,7 +1378,8 @@ function showPrep(stats, preparedText, statsText) {
   const flex = document.createElement('div');
   flex.style.cssText = 'display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start';
   const sc = document.createElement('div'); sc.className = 'scroll'; sc.append(t);
-  flex.append(sc, a);
+  flex.append(sc);
+  if (rowsP[0].includes('age_group')) flex.append(a);
   const links = document.createElement('p'); links.className = 'help';
   links.append('Save: ', fileLink('prepared.csv', preparedText, 'text/csv', 'the prepared data'), ', ',
                fileLink('prepared_stats.csv', statsText, 'text/csv', 'the full step table'), ', ',
@@ -1551,17 +1604,83 @@ function periodsYaml() {
     '\nperiod_labels:\n' + periodLabels().map(l => `  - ${JSON.stringify(l)}`).join('\n');
 }
 
-// ---------- step 7: compare by ----------
-// Any prepared column beyond the ones every analysis reads can group the animals.
+// ---------- step 7: animal groups ----------
+// Any prepared column beyond the ones every analysis reads is one carried
+// from step 3, and can group the animals. Its values are merged into at most
+// GROUP_CAP groups with animal_group_map, and a left-out value is cut with
+// animal_group_filter_pass, as the intake labels are; with no column chosen,
+// the settings leave out animal_group_columns and mLOS compares no groups.
 const CORE_COLUMNS = ['animal_id', 'intake_date', 'outcome_date', 'outcome_type', 'intake_type'];
-const GROUP_LABELS = { age_group: 'age group', animal_size: 'size' };
+const GROUP_LABELS = { age_group: 'age group', animal_size: 'animal_size (the size column of step 2)' };
+const yamlName = (n) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(n) ? n : JSON.stringify(n);
+let groupChoice = {};
 function buildGroupBy() {
   const cols = parseCSV(prepared, 1)[0].filter(c => !CORE_COLUMNS.includes(c));
-  const sel = $('group-by'), keep = wantGroup || sel.value;
+  // An empty choice is kept only when someone made it: a list not built yet
+  // starts at the default.
+  const sel = $('group-by'), keep = wantGroup != null ? wantGroup : sel.options.length ? sel.value : null;
   wantGroup = null;
-  sel.innerHTML = cols.length ? cols.map(c => `<option value="${esc(c)}">${esc(GROUP_LABELS[c] || c)}</option>`).join('') :
-    '<option value="">(nothing: the export has no size or date of birth)</option>';
-  sel.value = cols.includes(keep) ? keep : cols.includes('age_group') ? 'age_group' : (cols[0] || '');
+  sel.innerHTML = cols.map(c => `<option value="${esc(c)}">${esc(GROUP_LABELS[c] || c)}</option>`).join('') +
+    `<option value="">${cols.length ? '(no comparison of animal groups)' : '(nothing: step 3 carries no column to compare animals by)'}</option>`;
+  sel.value = cols.includes(keep) || keep === '' ? keep : cols.includes('age_group') ? 'age_group' : (cols[0] || '');
+  buildGroups();
+}
+const groupCounts = () => $('group-by').value ? countBy(parseCSV(prepared), $('group-by').value) : [];
+function buildGroups() {
+  const col = $('group-by').value, counts = groupCounts(), choice = groupChoice[col] = groupChoice[col] || {};
+  counts.forEach(([label], k) => {
+    if (label in choice) return;
+    choice[label] = { group: counts.length <= GROUP_CAP || k < GROUP_CAP - 1 ? label : 'OTHER', leaveOut: false };
+  });
+  const t = $('group-table');
+  t.innerHTML = counts.length ? '<thead><tr><th>Value</th><th class="num">Stays</th><th>Group</th><th>Leave out</th></tr></thead>' : '';
+  const body = document.createElement('tbody');
+  counts.forEach(([label, n], k) => {
+    const c = choice[label];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${esc(shownLabel(label))}</td><td class="num">${n.toLocaleString()}</td>` +
+      `<td><input type="text" id="group-name-${k}" list="animal-groups" value="${esc(c.group)}" aria-label="Group for ${esc(shownLabel(label))}"></td>` +
+      `<td><input type="checkbox" id="group-out-${k}" ${c.leaveOut ? 'checked' : ''} aria-label="Leave out ${esc(shownLabel(label))}"></td>`;
+    const g = tr.querySelector('input[type=text]'), o = tr.querySelector('input[type=checkbox]');
+    g.disabled = c.leaveOut;
+    g.oninput = () => { c.group = g.value.trim(); groupCheck(); };
+    o.onchange = () => { c.leaveOut = o.checked; g.disabled = o.checked; groupCheck(); };
+    body.append(tr);
+  });
+  t.append(body);
+  groupCheck();
+}
+function animalGroups() {
+  const choice = groupChoice[$('group-by').value] || {}, sums = {};
+  for (const [label, n] of groupCounts()) if (!choice[label].leaveOut) sums[choice[label].group] = (sums[choice[label].group] || 0) + n;
+  return Object.entries(sums).sort((a, b) => b[1] - a[1]);
+}
+function groupCheck() {
+  const col = $('group-by').value, counts = groupCounts(), choice = groupChoice[col] || {};
+  const groups = animalGroups(), names = groups.map(g => g[0]), problems = [];
+  const unnamed = counts.filter(([l]) => !choice[l].leaveOut && !choice[l].group);
+  if (unnamed.length) problems.push('give a group name to ' + unnamed.map(([l]) => shownLabel(l)).join(', '));
+  if (names.some(n => /[,=]/.test(n))) problems.push('a group name cannot contain a comma or an equals sign');
+  if (!groups.length && counts.length) problems.push('keep at least one value');
+  if (groups.length > GROUP_CAP) problems.push(`combine the ${groups.length} groups into at most ${GROUP_CAP}`);
+  const clash = counts.filter(([l]) => choice[l].leaveOut && names.includes(l));
+  if (clash.length) problems.push(clash.map(([l]) => `${shownLabel(l)} is left out but is also the name of a kept group; rename that group`).join('; '));
+  $('animal-groups').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+  if ($('ref-group').options.length) fillReference('ref-group', names);
+  const note = $('group-note');
+  note.className = problems.length ? 'status warn' : 'status';
+  note.textContent = !col ? '' : problems.length ? 'Before running: ' + problems.join('; ') + '.' :
+    'Groups: ' + groups.map(([g, n]) => `${shownLabel(g)} (${n.toLocaleString()})`).join(', ') + '.';
+  return problems;
+}
+function groupsYaml(col) {
+  if (!col) return '';
+  const counts = groupCounts(), choice = groupChoice[col];
+  const pairs = counts.filter(([l]) => !choice[l].leaveOut && choice[l].group !== l)
+                      .map(([l]) => `  - ${JSON.stringify(l)}: ${JSON.stringify(choice[l].group)}`);
+  const pass = counts.some(([l]) => choice[l].leaveOut) ? animalGroups().map(([g]) => `  - ${JSON.stringify(g)}`) : [];
+  return `animal_group_columns:\n  - ${JSON.stringify(col)}\n` + (pairs.length ? 'animal_group_map:\n' + pairs.join('\n') + '\n' : '') +
+    (pass.length ? 'animal_group_filter_pass:\n' + pass.join('\n') + '\n' : '');
 }
 
 // ---------- step 8: horizon and reference groups ----------
@@ -1589,15 +1708,14 @@ function fillReference(id, names, want) {
 function buildReferences() {
   if (!prepared) return;
   fillReference('ref-intake', intakeGroups().map(g => g[0]), wantRefs.intake);
-  const group = $('group-by').value;
-  fillReference('ref-group', group ? countBy(parseCSV(prepared), group).map(g => g[0]) : [], wantRefs.group);
+  fillReference('ref-group', animalGroups().map(g => g[0]), wantRefs.group);
   wantRefs = { intake: null, group: null };
 }
 // A new cap rechecks the window's start but never moves it: the data may
 // already be prepared with that window.
 $('cap').addEventListener('input', () => { horizonCheck(); windowNote(); });
 $('plot-cap').addEventListener('input', horizonCheck);
-$('group-by').addEventListener('change', () => fillReference('ref-group', countBy(parseCSV(prepared), $('group-by').value).map(g => g[0])));
+$('group-by').addEventListener('change', () => { buildGroups(); fillReference('ref-group', animalGroups().map(g => g[0])); });
 function referencesYaml() {
   const lines = [];
   if ($('ref-intake').value && intakeCounts().length) lines.push(`intake_type_reference: ${JSON.stringify($('ref-intake').value)}`);
@@ -1613,18 +1731,11 @@ $('run-btn').onclick = async () => {
   const st = $('s6-status');
   const group = $('group-by').value;
   $('run-results').replaceChildren();
-  const rowsP = parseCSV(prepared);
-  const groupLevels = group ? countBy(rowsP, group) : [];
   if (!ownSettings && outcomeCheck().length) { st.className = 'status bad'; st.textContent = 'Classify every outcome label first.'; return; }
   if (!ownSettings && intakeCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the intake groups first.'; return; }
+  if (!ownSettings && groupCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the animal groups first.'; return; }
   if (!ownSettings && periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
   if (horizonCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the analysis horizon first.'; return; }
-  if (!ownSettings && groupLevels.length > GROUP_CAP) {
-    st.className = 'status bad';
-    st.textContent = `This tool compares at most ${GROUP_CAP} groups, and ${group} has ${groupLevels.length}: ${groupLevels.map(x => x[0]).join(', ')}. Merge some of them, or compare by a different column.`;
-    window.demo.capRefusal = st.textContent;
-    return;
-  }
   $('run-btn').disabled = true;
   st.className = 'status'; st.textContent = 'Waiting for R...';
   await rReady;
@@ -1632,8 +1743,7 @@ $('run-btn').onclick = async () => {
   const out = '/out_' + (++runNo);
   const template = await (await fetch('mlos_settings_template.yaml')).text();
   const settingsText = ownSettings ? ownSettings.effective : withAnswers(
-    // With no column to compare animals by, mLOS skips that comparison.
-    (group ? template.replace('__GROUP__', group) : template.replace('animal_group_columns:\n  - __GROUP__\n', '')).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml())
+    template.replace('animal_group_columns:\n  - __GROUP__\n', groupsYaml(group)).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml())
       .replace('__CAP__', capValue()).replace('__PLOTCAP__', +$('plot-cap').value).replace('__REFERENCES__', referencesYaml()),
     settingsAnswers(group));
   window.demo.settingsYaml = settingsText;
