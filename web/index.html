@@ -13,6 +13,9 @@ h1 { margin:0; font-size:26px; }
 h2 { margin:0 0 4px; font-size:18px; }
 p { margin:4px 0; }
 .lede { color:var(--muted); max-width:70ch; }
+.notice { margin:12px 0 4px; padding:12px 14px; border:1px solid var(--warn); border-left-width:5px; border-radius:6px; background:#fdf6ee; max-width:80ch; }
+.notice strong { color:var(--warn); }
+.notice a { color:var(--accent); }
 section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:10px; }
 section.locked { opacity:.45; pointer-events:none; }
 .step { color:var(--accent); font-weight:600; font-size:13px; letter-spacing:.04em; text-transform:uppercase; }
@@ -51,6 +54,10 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
   <header>
     <h1>mLOS: from a shelter export to results</h1>
     <p class="lede">Everything below runs inside this browser tab. The export is read here, prepared by ShelterDataPrep (Python), and analyzed by mLOS (R). Nothing is sent to a server.</p>
+    <div class="notice" role="note">
+      <p><strong>This page runs a subset of mLOS.</strong> It leaves out the Weibull regression (<code>parametric_regression</code>) and the confidence bounds of the conditional outcome curves (<code>aj_conditional_ci</code>); it compares at most four periods, six intake groups, and six animal groups drawn from one column; and it builds the slide deck with its default settings.</p>
+      <p>The full mLOS runs on your own computer, with R. Install it from <a href="https://github.com/Shelter-Data-Analysis/mLOS">GitHub</a> or from its archive at Zenodo, <a href="https://doi.org/10.5281/zenodo.22083814">doi:10.5281/zenodo.22083814</a>. The mLOS settings file this page writes runs there as is, and its ShelterDataPrep configuration runs there once its folders are pointed at your own.</p>
+    </div>
     <p class="runtime" id="runtime-status">Starting Python and R in the background...</p>
   </header>
 
