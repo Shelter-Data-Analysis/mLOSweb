@@ -400,28 +400,14 @@ async function loadWorkbook(f) {
     const data = new Uint8Array(await f.arrayBuffer());
     py.FS.mkdirTree('/work');
     py.FS.writeFile('/work/export.xlsx', data);
-    // Excel writes font families above 14, which openpyxl refuses as a broken
-    // style table. A font's family changes only how text is drawn, so the page
-    // drops those entries and reads, and has ShelterDataPrep read, that copy.
+    // ShelterDataPrep opens the workbook, leaving out of a copy the font
+    // families above 14 that openpyxl refuses; the file itself is what the
+    // preparation reads, and its run log says what was left out.
     const info = JSON.parse(py.runPython(`
-import json, re, zipfile
+import json
 import pandas as pd
-def repair(path):
-    with zipfile.ZipFile(path) as z:
-        parts = [(i, z.read(i.filename)) for i in z.infolist()]
-    dropped = 0
-    with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as z:
-        for i, data in parts:
-            if i.filename == 'xl/styles.xml':
-                data, dropped = re.subn(rb'<family val="(1[5-9]|[2-9][0-9]|[0-9]{3,})"\\s*/>', b'', data)
-            z.writestr(i, data)
-    return dropped
-try:
-    book, repaired = pd.ExcelFile('/work/export.xlsx'), 0
-except ValueError as e:
-    if 'stylesheet' not in str(e) or not (repaired := repair('/work/export.xlsx')):
-        raise
-    book = pd.ExcelFile('/work/export.xlsx')
+from shelterprep import open_workbook
+book, repaired = open_workbook('/work/export.xlsx')
 # The names of a sheet, for the guess: its first row with a value, as
 # ShelterDataPrep takes them.
 def names(sheet):
@@ -432,8 +418,8 @@ json.dumps({'repaired': repaired, 'sheets': [{'name': name, 'header': names(name
              'rows': None if book.book[name].max_row is None else max(book.book[name].max_row - 1, 0)}
             for name in book.sheet_names]})`));
     const sheets = info.sheets;
-    workbook = { name: f.name, data: info.repaired ? py.FS.readFile('/work/export.xlsx') : data, sheets,
-                 repair: info.repaired ? `openpyxl, which reads workbooks for pandas and ShelterDataPrep, cannot read ${f.name} as saved: its fonts name a font family above 14. The page read a copy without those ${info.repaired} font settings, which change how text is drawn and no cell value. On your own computer, ShelterDataPrep stops on the original with "could not read stylesheet".` : '' };
+    workbook = { name: f.name, data, sheets,
+                 repair: info.repaired ? `${f.name} gives its fonts a family above 14, which Excel writes and openpyxl, the program that reads workbooks for ShelterDataPrep, refuses. ShelterDataPrep reads a copy without those ${info.repaired} font settings, which change how text is drawn and no cell value, and its run log says so.` : '' };
     const sel = $('sheet-sel');
     sel.innerHTML = sheets.map((s, k) => `<option value="${k}">${esc(s.name)} (${s.rows === null ? '' : `about ${s.rows.toLocaleString()} rows, `}${s.header.length} column${s.header.length === 1 ? '' : 's'})</option>`).join('');
     sel.onchange = () => readSheet(sheets[+sel.value]);
@@ -453,57 +439,24 @@ async function readSheet(sheet) {
   st.className = 'status'; st.textContent = `Reading sheet ${sheet.name}...`;
   py.globals.set('sheet_name', sheet.name);
   // ShelterDataPrep's own reader gives the rows and column names a run reads:
-  // the names from the first row with a value, the empty rows dropped.
-  // A heading merged across columns keeps its text in the leftmost one, which
-  // may be empty while the values sit in another column of the span; the
-  // merged ranges of the row of names are read from the sheet's XML for that.
+  // the names from the first row with a value, the empty rows dropped, and a
+  // column of values under a merged heading named after it.
   const t = JSON.parse(py.runPython(`
-import posixpath, xml.etree.ElementTree as ET
 from shelterprep import read_source, SourceError
-def header_merges(path, sheet, row):
-    ns = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
-          'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'}
-    with zipfile.ZipFile(path) as z:
-        rid = next(s.get('{%s}id' % ns['r']) for s in ET.fromstring(z.read('xl/workbook.xml')).iter('{%s}sheet' % ns['m'])
-                   if s.get('name') == sheet)
-        target = next(r.get('Target') for r in ET.fromstring(z.read('xl/_rels/workbook.xml.rels')) if r.get('Id') == rid)
-        part = target.lstrip('/') if target.startswith('/') else posixpath.normpath(posixpath.join('xl', target))
-        xml = z.read(part).decode('utf-8', 'replace')
-    index = lambda letters: sum((ord(c) - 64) * 26 ** k for k, c in enumerate(reversed(letters))) - 1
-    found = re.findall(r'<mergeCell ref="([A-Z]+)([0-9]+):([A-Z]+)[0-9]+"', xml)
-    return [[index(a), index(b)] for a, r, b in found if int(r) == row and a != b]
 try:
-    frame, _, header_row, empty = read_source('/work/export.xlsx', sheet_name)
-    result = {'header': [str(h) for h in frame.columns], 'rows': frame.fillna('').values.tolist(),
-              'header_row': header_row, 'empty': empty,
-              'merges': header_merges('/work/export.xlsx', sheet_name, header_row + 1)}
+    source = read_source('/work/export.xlsx', sheet_name)
+    result = {'header': [str(h) for h in source.frame.columns], 'rows': source.frame.fillna('').values.tolist(),
+              'header_row': source.header_row, 'empty': source.empty_rows, 'moved': source.headings_moved}
 except SourceError as e:
     result = {'error': str(e)}
 json.dumps(result)`));
   $('sheet-note').className = workbook.repair ? 'status warn' : 'status';
   $('sheet-note').textContent = workbook.note;
   if (t.error) { st.className = 'status bad'; st.textContent = `Sheet ${sheet.name} cannot be read: ${t.error.replace('/work/export.xlsx', workbook.name).replace('export.xlsx', workbook.name)}. Choose another.`; $('preview').replaceChildren(); return; }
-  // Where the named column of a merged heading is empty and exactly one other
-  // column of the span, unnamed, holds values, the heading names that column.
-  // The page shows it under the heading, and the configuration maps the
-  // heading to the column's name in the file, such as "Unnamed: 38".
-  const head = t.header.map(h => h.trim()), fileNames = {}, moved = [];
-  const filled = (i) => t.rows.some(r => (r[i] || '').trim());
-  for (const [a, b] of t.merges) {
-    if (a >= head.length || blankName(head[a]) || filled(a)) continue;
-    const under = [];
-    for (let j = a + 1; j <= Math.min(b, head.length - 1); j++) if (filled(j)) under.push(j);
-    if (under.length !== 1 || !blankName(head[under[0]])) continue;
-    fileNames[head[a]] = head[under[0]];
-    moved.push(`${head[a]} (its values are in the column pandas names ${head[under[0]]})`);
-    head[under[0]] = head[a];
-    head[a] = '';
-  }
-  $('sheet-note').textContent = [workbook.note, moved.length ? `Merged headings in the row of column names name the column of values under them: ${moved.join('; ')}. The configuration maps each to that column.` : ''].filter(Boolean).join(' ');
-  loadTable(workbook.name, { file: 'export.xlsx', data: workbook.data, sheet: sheet.name, fileNames, headerRow: t.header_row, emptyRows: t.empty }, head, t.rows);
+  const moved = t.moved.map(([heading, column]) => `${heading} (the column pandas names ${column})`);
+  $('sheet-note').textContent = [workbook.note, moved.length ? `Headings merged across columns name the column of values under them, as ShelterDataPrep reads them: ${moved.join('; ')}.` : ''].filter(Boolean).join(' ');
+  loadTable(workbook.name, { file: 'export.xlsx', data: workbook.data, sheet: sheet.name, headerRow: t.header_row, emptyRows: t.empty }, t.header.map(h => h.trim()), t.rows);
 }
-// The name ShelterDataPrep knows a column of the export by.
-const fileName = (col) => (exportSource && exportSource.fileNames && exportSource.fileNames[col]) || col;
 
 // ---------- files from earlier runs ----------
 // An uploaded ShelterDataPrep configuration stands in for steps 2 to 6, and an
@@ -1060,13 +1013,7 @@ function configYaml() { return withAnswers(configBody(), configAnswers()); }
 function configBody() {
   const m = mapping();
   const ages = ageGroups(), size = !!m.animal_size, age = !!m.dob && ages.length > 0;
-  // A column the steps name, unmatched in step 2, whose heading the page
-  // moved, is mapped too, so ShelterDataPrep finds it under the heading.
-  const extra = carriedColumns(age).filter(c => c !== 'animal_size' && c !== 'age_group');
-  const stepCols = [$('species-col').value, ...notStay.filter(r => r.col && r.values.size).map(r => r.col), ...extra];
-  const moved = [...new Set(stepCols.filter(c => c && stepKey(c) === c && fileName(c) !== c))];
-  const cols = [...FIELDS.filter(f => m[f.key]).map(f => `  ${f.key}: ${JSON.stringify(fileName(m[f.key]))}`),
-                ...moved.map(c => `  ${JSON.stringify(c)}: ${JSON.stringify(fileName(c))}`)].join('\n');
+  const cols = FIELDS.filter(f => m[f.key]).map(f => `  ${f.key}: ${JSON.stringify(m[f.key])}`).join('\n');
   return `# Written by mLOS Web from steps 2 to 6. source_dir, source_file, and
 # dest_dir name the page's own files; change them to run this file on your computer.
 source_dir:  "/work"

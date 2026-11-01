@@ -10,7 +10,7 @@ it is fetched, and a download that does not match stops the build.
 # release's tag. The mLOS commit supplies both the R analysis and the deck
 # builder, mlos_review.
 MLOS_REF = "dc8ec2de616a4fccb7a4b893428276c02c2eeb7d"
-SDP_REF = "f6662483936ed06e963e5114554494cd165fb607"
+SDP_REF = "c539d45b81cf52eecfa68b01456392e11ec65290"
 
 # webR, the build of R for WebAssembly, from its npm package. Its R version
 # decides which directory of repo.r-wasm.org the packages come from.
