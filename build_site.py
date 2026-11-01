@@ -145,15 +145,18 @@ def wheels() -> list[str]:
 def demo_data() -> list[dict]:
     demos = []
     for demo in pins.DEMOS:
-        name = demo["url"].split("/files/", 1)[1].split("?", 1)[0]
-        data = gzip.decompress(fetch(demo["url"], name))
+        name = demo["url"].rsplit("/", 1)[1].split("?", 1)[0]
+        data = fetch(demo["url"], name)
+        # A gzipped CSV is served uncompressed; a workbook as deposited.
+        if data[:2] == b"\x1f\x8b":
+            data = gzip.decompress(data)
         digest = hashlib.sha256(data).hexdigest()
         if digest != demo["sha256"]:
             sys.exit("The demo export {0} has checksum {1}, not {2} as pins.py "
                      "states. Delete .cache/{0} and build again; if it persists, "
                      "the deposit has changed.".format(name, digest, demo["sha256"]))
         write(SITE / "data" / demo["file"], data)
-        demos.append({"file": demo["file"], "label": demo["label"]})
+        demos.append({"file": demo["file"], "label": demo["label"], "doi": demo["doi"]})
     return demos
 
 

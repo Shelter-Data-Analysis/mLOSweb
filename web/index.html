@@ -57,10 +57,11 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
   <section id="s1">
     <span class="step">Step 1</span>
     <h2>Load the export</h2>
-    <p class="help">A CSV file or an Excel workbook (.xlsx or .xlsm) exported from the shelter's software, one row per stay, with the column names in the row above the data. The demo exports are raw files deposited in Zenodo (10.5281/zenodo.22051091), each a different shelter's or a different pull.</p>
+    <p class="help">A CSV file or an Excel workbook (.xlsx or .xlsm) exported from the shelter's software, one row per stay, with the column names in the row above the data. The demo exports are raw files in public deposits, each a different shelter's or a different pull; the deposit of the one chosen is named below the list.</p>
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
       <select id="demo-sel" aria-label="Demo export"></select>
       <button id="load-demo">Use this demo export</button>
+      <span class="help" id="demo-doi"></span>
       <label class="help">or choose a file: <input type="file" id="file-input" accept=".csv,.gz,.xlsx,.xlsm"></label>
     </div>
     <div class="grid2" id="sheet-row" hidden>
@@ -339,10 +340,15 @@ function loadTable(name, source, head, body) {
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // The demo exports build_site.py fetched, in the order pins.py lists them.
+// A workbook demo goes the way an uploaded workbook does.
 $('demo-sel').innerHTML = manifest.demos.map((d, k) => `<option value="${k}">${esc(d.label)}</option>`).join('');
+const showDoi = () => { const d = manifest.demos[+$('demo-sel').value]; $('demo-doi').innerHTML = `Deposit: <a href="https://doi.org/${esc(d.doi)}">doi:${esc(d.doi)}</a>`; };
+$('demo-sel').onchange = showDoi;
+showDoi();
 $('load-demo').onclick = async () => {
-  const d = manifest.demos[+$('demo-sel').value];
-  loadText(d.file, await (await fetch('data/' + d.file)).text());
+  const d = manifest.demos[+$('demo-sel').value], r = await fetch('data/' + d.file);
+  if (/\.xls[xm]$/i.test(d.file)) return loadWorkbook(new File([await r.blob()], d.file));
+  loadText(d.file, await r.text());
 };
 $('file-input').onchange = async (e) => {
   const f = e.target.files[0];
