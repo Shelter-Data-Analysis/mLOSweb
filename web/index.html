@@ -1347,10 +1347,13 @@ const OUTCOME_CLASSES = [
 ];
 const OUTCOME_GUESSES = [
   [/^_UNKNOWN_$/, 'in_care'],
+  // A label naming a return to owner is one wherever it was made, so RTO-FIELD
+  // is community live, before FIELD sends a label to other live.
+  [/RTO/, 'L'],
   [/RTF|FIELD/, 'T'],
-  [/ADOPT|^RTO|RETURN.*OWNER|RECLAIM/, 'L'],
+  [/ADOPT|RETURN.*OWNER|RECLAIM/, 'L'],
   [/TRANSFER|RESCUE|FOSTER|PARTNER/, 'T'],
-  [/EUTH|DIED|DEATH|DEAD|MISSING|LOST|STOLEN/, 'N'],
+  [/EUTH|DIED|DEATH|DEAD|DISPOSAL|MISSING|LOST|STOLEN/, 'N'],
 ];
 let outcomeChoice = {};
 function guessOutcome(label) {
