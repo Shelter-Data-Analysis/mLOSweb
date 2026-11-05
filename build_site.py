@@ -24,6 +24,7 @@ import io
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tarfile
 import urllib.request
@@ -160,6 +161,19 @@ def demo_data() -> list[dict]:
     return demos
 
 
+def site_commit() -> str:
+    """The mLOSweb commit the site is built from, with "+changes" when the
+    working tree differs from it, so a run summary names the page it came from."""
+    try:
+        sha = subprocess.run(["git", "rev-parse", "--short=7", "HEAD"], cwd=HERE, capture_output=True,
+                             text=True, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=HERE,
+                               capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return sha + ("+changes" if dirty else "")
+
+
 def main() -> None:
     if SITE.exists():
         shutil.rmtree(SITE)
@@ -178,6 +192,7 @@ def main() -> None:
         "mlos": {"version": mlos_version, "commit": pins.MLOS_REF, "files": mlos_files,
                  "review_files": review_files},
         "shelterprep": {"version": sdp_version, "commit": pins.SDP_REF, "files": sdp_files},
+        "site_commit": site_commit(),
         "webr": pins.WEBR_VERSION,
         "pyodide": pins.PYODIDE_VERSION,
         "r_packages": [f[:-len(".tgz")] for f in pins.R_PACKAGES],

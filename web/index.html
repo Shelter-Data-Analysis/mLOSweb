@@ -220,6 +220,16 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <p class="status" id="s7-status"></p>
     <div id="deck-results"></div>
   </section>
+
+  <section id="s8" class="locked">
+    <span class="step">Step 10 (optional)</span>
+    <h2>Share some basic stats on your study</h2>
+    <p class="help">Help us improve the software by sharing some basic stats on your study. We do not track your data or your usage: this page sends nothing itself. The button opens a new email in your email program, addressed to us, holding the summary below: how the page was used and how your study was set up (counts, dates, choices, and group labels). It holds no results, no record of any animal, and no file. Delete any line you prefer not to share, and send it only if you wish. We may write back to ask whether you would share the data.</p>
+    <pre id="share-preview"></pre>
+    <div class="file-row"><button id="share-btn" class="secondary">Write the email</button><button id="share-copy" class="secondary">Copy the summary</button></div>
+    <p class="help" id="share-fallback"></p>
+    <p class="status warn" id="share-long" hidden>The summary is long. Some email programs, such as Outlook on Windows, cut a long message short. If the email is cut short, use "Copy the summary" and paste it into the email.</p>
+  </section>
   <footer class="runtime" id="versions"></footer>
 </main>
 
@@ -1821,6 +1831,7 @@ async function showRun(out, group) {
   window.demo.outputDir = out;
   lastRun = { out, names };
   $('s7').classList.remove('locked');
+  $('s8').classList.remove('locked');
   $('deck-results').replaceChildren();
   $('s7-status').textContent = '';
   window.demo.webR = webR;
@@ -1875,7 +1886,100 @@ async function showRun(out, group) {
   d.innerHTML = '<summary>Show the mLOS log</summary><pre></pre>';
   d.querySelector('pre').textContent = log;
   wrap.append(d);
+  // A summary that cannot be written leaves step 10 without one, not the run.
+  try { await shareSummary(out, window.demo.timings.analyze); }
+  catch (e) { shareText = ''; $('share-preview').textContent = 'The summary could not be written: ' + (e.message || e); window.demo.errors.push(String(e)); }
 }
+
+// ---------- step 10: email to the mLOS team ----------
+// The email carries a summary of how the study was set up, read from
+// results.json: counts, dates, choices, and the group labels, with no results,
+// no record of any one animal, and no file. The user sees the text before the
+// email opens. Splitting the address stops only the crudest harvesters.
+const SHARE_TO = ['mLOSweb', 'outlook.com'].join('@');
+let shareText = '';
+$('share-fallback').append('If no email opens, copy the summary and send it to ', Object.assign(document.createElement('a'), { href: 'mailto:' + SHARE_TO, textContent: SHARE_TO }), '.');
+
+// The summary is one "key: value" per line, so a program can read the emails
+// back, with lines the user deletes simply missing. Keys are fixed; numbers are
+// plain (no thousands separators), and dates are ISO. A list of labels is
+// separated by " | ", since labels may hold spaces and commas. summary_format
+// numbers this layout; change it with any change of a key or its meaning.
+let shareRes = null, shareRun = null, deckState = 'not built';
+async function shareSummary(out, seconds) {
+  shareRes = JSON.parse(new TextDecoder().decode(await webR.FS.readFile(out + '/results.json')));
+  shareRun = { seconds };
+  deckState = 'not built';
+  renderShare();
+}
+function renderShare() {
+  const res = shareRes, dp = res.data_preparation, st = res.settings, all = res.strata.all;
+  const r1 = (x) => x == null || !isFinite(x) ? 'NA' : x.toFixed(1);
+  const cell = (m, row, col = 0) => { const i = m && m.rows ? m.rows.indexOf(row) : -1; return i < 0 ? null : m.values[i][col]; };
+  const demo = manifest.demos.find(d => d.file === exportName);
+  const facts = exportFacts(), guess = facts && cutGuess(facts);
+  const cutText = !guess ? 'unknown' : guess.start === 'outcome' && guess.end === 'outcome' ? 'outcome date'
+    : guess.end === 'outcome' ? 'intake and outcome date' : guess.start === 'outcome' ? 'outcome date at start' : 'intake date or none';
+  const per = st.periods.columns;
+  const labels = (k) => [].concat(res.strata[k] ? res.strata[k].labels : []).join(' | ') || 'none';
+  const lines = [
+    'mLOS Web run summary: how the study was set up, with no results and no record of any animal.',
+    'Delete any line you prefer not to share.',
+    '',
+    '# Run',
+    'summary_format: 1',
+    `site_commit: ${manifest.site_commit || 'unknown'}`,
+    `mlos_version: ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)})`,
+    `shelterprep_version: ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)})`,
+    `run_date: ${todayIso()}`,
+    `export_source: ${demo ? 'demo ' + demo.file : 'own file'}`,
+    `export_type: ${exportSource && exportSource.sheet != null ? 'workbook' : 'csv'}`,
+    `configuration_from: ${ownConfig ? 'uploaded file' : 'page questions'}`,
+    `settings_from: ${ownSettings ? 'uploaded file' : 'page questions'}`,
+    `analysis_seconds: ${r1(shareRun.seconds)}`,
+    `deck: ${deckState}`,
+    '',
+    '# Data',
+    `species: ${$('species-val').value}`,
+    `export_rows: ${rows.length}`,
+    `export_columns: ${header.length}`,
+    `columns_carried: ${(carried ? [...carried] : []).join(' | ') || 'none'}`,
+    `cut_by_date_guess: ${cutText}`,
+    `rows_read: ${dp.rows_read}`,
+    `rows_analyzed: ${dp.rows_analyzed}`,
+    `animals: ${dp.n_animals}`,
+    `stays: ${all.unified_stay_counts.columns.total_stays[0]}`,
+    `intake_dates: ${dp.intake_date_first} to ${dp.intake_date_last}`,
+    `outcome_dates: ${dp.outcome_date_first} to ${dp.outcome_date_last}`,
+    '',
+    '# Analysis',
+    `study_window: ${dp.study_window_start} to ${dp.study_window_end}`,
+    `window_days: ${st.window_days}`,
+    `stay_cap_days: ${st.restricted_stay_cap}`,
+    `periods: ${per.period_label.length}`,
+    `intake_groups: ${labels('intake_type')}`,
+    `animal_group_column: ${st.animal_group_columns || 'none'}`,
+    `animal_groups: ${labels('animal_group')}`,
+    `outcomes: ${cell(all.outcomes, 'completed_outcomes_total')}`,
+    `overlapping_stays_dropped: ${(() => { const l = dp.ledger.columns, j = l.name.indexOf('overlapping_stays'); return j < 0 ? 0 : l.rows_affected[j]; })()}`,
+    '',
+  ];
+  shareText = lines.join('\r\n');
+  $('share-preview').textContent = lines.join('\n');
+  $('share-copy').textContent = 'Copy the summary';
+  const len = shareUrl().length;
+  $('share-long').hidden = len <= 2000;
+  window.demo.shareLength = len;
+}
+function shareUrl() {
+  return `mailto:${SHARE_TO}?subject=${encodeURIComponent('mLOS Web run summary')}&body=${encodeURIComponent(shareText)}`;
+}
+window.demo.shareUrl = shareUrl;
+$('share-btn').onclick = () => { location.href = shareUrl(); };
+$('share-copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(shareText); $('share-copy').textContent = 'Copied'; }
+  catch (e) { $('share-copy').textContent = 'Copy failed: select the text above'; }
+};
 
 // ---------- step 9: deck builder ----------
 // mlos_review runs in the same Python as ShelterDataPrep. Its extra packages
@@ -1978,6 +2082,8 @@ $('deck-btn').onclick = async () => {
     mark('deck', t0);
     window.demo.deck = result;
     showDeck(py, result);
+    deckState = result.built === 'deck' ? 'slides and tables' : result.error ? 'slides failed, tables built' : 'tables only';
+    if (shareRes) renderShare();
     st.className = result.error ? 'status warn' : 'status ok';
     st.textContent = result.error
       ? `The slides could not be built (${result.error}), so the tables were built alone.`
@@ -1987,6 +2093,8 @@ $('deck-btn').onclick = async () => {
     const msg = String(e.message || e).split('\n').filter(Boolean);
     st.textContent = 'The deck builder stopped: ' + (msg.find(l => /Error:/.test(l)) || msg[msg.length - 1]);
     window.demo.errors.push(String(e));
+    deckState = 'failed';
+    if (shareRes) renderShare();
   }
   $('deck-btn').disabled = false;
 };
