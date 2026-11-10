@@ -3,53 +3,82 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>mLOS Web</title>
 <style>
-:root { --bg:#f5f6f4; --card:#fff; --fg:#1c2321; --muted:#5d6865; --line:#d9ddda; --accent:#2f6f5e; --warn:#a1580f; --bad:#b3261e; --ok:#2f6f5e; }
+:root { color-scheme: light; --bg:#f5f6f4; --card:#fff; --fg:#1c2321; --muted:#47514e; --line:#cfd4d1; --accent:#2a6655; --warn:#8f4c0a; --bad:#b3261e; --ok:#2a6655; }
 * { box-sizing: border-box; }
-body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; display:flex; flex-direction:column; gap:16px; }
-h1 { margin:0; font-size:26px; }
-h2 { margin:0 0 4px; font-size:18px; }
+/* Sizes are set for a screen shared over a video call, where the viewer sees
+   the page shrunk: no text below 13px, and help text in a dark gray. */
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; display:flex; flex-direction:column; gap:16px; }
+h1 { margin:0; font-size:28px; }
+h2 { margin:0 0 4px; font-size:21px; }
+h3 { font-size:17px; }
 p { margin:4px 0; }
+a { color:var(--accent); }
 .lede { color:var(--muted); max-width:70ch; }
 .notice { margin:12px 0 4px; padding:12px 14px; border:1px solid var(--warn); border-left-width:5px; border-radius:6px; background:#fdf6ee; max-width:80ch; }
 .notice strong { color:var(--warn); }
-.notice a { color:var(--accent); }
-section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:18px; display:flex; flex-direction:column; gap:10px; }
 section.locked { opacity:.45; pointer-events:none; }
-.step { color:var(--accent); font-weight:600; font-size:13px; letter-spacing:.04em; text-transform:uppercase; }
-.help { color:var(--muted); font-size:14px; max-width:75ch; }
-table { border-collapse:collapse; font-size:13px; }
-th, td { border-bottom:1px solid var(--line); padding:4px 10px 4px 0; text-align:left; vertical-align:top; }
+.step { color:var(--accent); font-weight:700; font-size:14px; letter-spacing:.04em; text-transform:uppercase; }
+.help { color:var(--muted); font-size:15px; max-width:75ch; }
+table { border-collapse:collapse; font-size:14px; }
+th, td { border-bottom:1px solid var(--line); padding:5px 12px 5px 0; text-align:left; vertical-align:top; }
 th { font-weight:600; }
 td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .scroll { overflow-x:auto; }
-select, input[type=text], input[type=number] { font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:4px; background:#fff; }
+select, input[type=text], input[type=number], input[type=date] { font:inherit; padding:5px 7px; border:1px solid #9aa39f; border-radius:4px; background:#fff; color:var(--fg); }
 input[type=number] { width:6em; }
 select, input[type=file] { max-width:100%; }
+input[type=file] { font-size:15px; }
+input[type=checkbox] { width:16px; height:16px; vertical-align:-2px; }
 .grid2 > * { min-width:0; }
 [hidden] { display:none !important; }
-button { font:inherit; padding:8px 16px; border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; align-self:flex-start; }
+button { font:inherit; font-weight:600; padding:9px 18px; border-radius:6px; border:2px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; align-self:flex-start; }
 button.secondary { background:#fff; color:var(--accent); }
 button:disabled { opacity:.5; cursor:default; }
-button:focus-visible, select:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-.status { font-size:14px; color:var(--muted); }
-.status.ok { color:var(--ok); } .status.bad { color:var(--bad); } .status.warn { color:var(--warn); }
-.grid2 { display:grid; grid-template-columns: max-content 1fr; gap:6px 12px; align-items:center; }
-pre { background:#f0f2f0; border:1px solid var(--line); border-radius:6px; padding:10px; font-size:12px; overflow:auto; max-height:320px; margin:0; }
-details summary { cursor:pointer; color:var(--accent); font-size:14px; }
-.plots { display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:12px; }
-.plots figure { margin:0; font-size:12px; color:var(--muted); }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+.status { font-size:15px; color:var(--muted); }
+.status.ok { color:var(--ok); } .status.bad { color:var(--bad); font-weight:600; } .status.warn { color:var(--warn); }
+.grid2 { display:grid; grid-template-columns: max-content 1fr; gap:8px 12px; align-items:center; }
+pre { background:#f0f2f0; border:1px solid var(--line); border-radius:6px; padding:10px; font-size:13px; overflow:auto; max-height:360px; margin:0; }
+details summary { cursor:pointer; color:var(--accent); font-size:15px; font-weight:600; }
+.plots { display:grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap:14px; }
+.plots figure { margin:0; font-size:13px; color:var(--muted); }
 .plots img { width:100%; border:1px solid var(--line); border-radius:4px; background:#fff; }
-.runtime { font-size:13px; color:var(--muted); }
+.runtime { font-size:14px; color:var(--muted); }
 .deck-tables { display:flex; flex-direction:column; gap:18px; }
-.deck-tables h4 { margin:0 0 4px; font-size:14px; }
+.deck-tables h4 { margin:0 0 4px; font-size:16px; }
 .deck-tables td.num { white-space:nowrap; }
-.flag { font-size:10px; color:var(--accent); font-weight:600; margin-left:3px; }
+.flag { font-size:12px; color:var(--accent); font-weight:700; margin-left:3px; }
 .file-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.file-row button { padding:3px 10px; font-size:13px; }
-.tnote { font-size:12px; color:var(--muted); font-style:italic; margin:4px 0 0; max-width:80ch; }
+.file-row button { padding:4px 12px; font-size:14px; }
+.tnote { font-size:13px; color:var(--muted); font-style:italic; margin:4px 0 0; max-width:80ch; }
+/* The warning shown beside each long run. Browsers slow a tab that is
+   behind another tab or window, so it is meant to be hard to miss. */
+.stay { display:flex; gap:14px; align-items:center; padding:14px 18px; border:3px solid #b45309; border-radius:8px; background:#fef3c7; color:#3b2405; font-size:18px; line-height:1.4; }
+.stay .icon { flex:none; width:44px; height:44px; border-radius:50%; background:#b45309; color:#fff; font-size:28px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+.stay strong { display:block; font-size:21px; color:#7c2d12; }
+.stay.running { border-color:#b3261e; background:#fde8e6; animation: pulse 1.6s ease-in-out infinite; }
+.stay.running .icon { background:#b3261e; }
+.stay.running strong { color:#8c1d18; }
+.stay.done { border-color:#2a6655; background:#e3f1ec; color:#14342b; }
+.stay.done strong { color:#1d4d40; }
+.stay.done .icon { background:#2a6655; }
+.stay.stale { border-color:#a16207; background:#fde047; color:#3b2a05; }
+.stay.stale strong { color:#3b2a05; }
+.stay.stale .icon { background:#a16207; }
+.stale#run-results:not(:empty), .stale#deck-results:not(:empty) { outline:4px solid #facc15; outline-offset:6px; border-radius:4px; }
+.stale#run-results:not(:empty)::before, .stale#deck-results:not(:empty)::before { content:"Out of date: made before the latest changes above"; display:block; margin-bottom:8px; padding:4px 10px; background:#fde047; color:#3b2a05; font-weight:700; border-radius:4px; }
+button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shadow:0 0 0 4px rgba(250,204,21,.4); }
+.stay.left { border-color:#b3261e; background:#b3261e; color:#fff; }
+.stay.left strong { color:#fff; }
+.stay.left .icon { background:#fff; color:#b3261e; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(179,38,30,.18); } }
+@media (prefers-reduced-motion: reduce) { .stay.running { animation:none; } }
+@media (max-width: 560px) { .stay { font-size:16px; } .stay strong { font-size:18px; } .stay .icon { width:36px; height:36px; font-size:22px; } }
 </style>
 </head>
 <body>
@@ -108,11 +137,11 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
       <label for="species-col">Species column</label><select id="species-col"></select>
       <label for="species-val">Species to study</label><select id="species-val"></select>
     </div>
-    <h3 style="margin:8px 0 0; font-size:15px">Rows that are not shelter stays</h3>
+    <h3 style="margin:8px 0 0">Rows that are not shelter stays</h3>
     <div id="notstay-rules" style="display:flex; flex-direction:column; gap:10px"></div>
     <button class="secondary" id="notstay-add">Add another column</button>
     <p class="status" id="s2b-note"></p>
-    <h3 style="margin:8px 0 0; font-size:15px">Columns to compare animals by</h3>
+    <h3 style="margin:8px 0 0">Columns to compare animals by</h3>
     <p class="help">Tick the columns the prepared data should carry. The analysis can compare groups of animals by any one of them, chosen in step 8 and changed there without preparing the data again. Listed are the export's columns with 2 to 20 different values, and the age group made in step 6 from the date of birth.</p>
     <div class="help" id="carry-cols" style="columns: 2 240px"></div>
   </section>
@@ -164,16 +193,16 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <div id="set-panel" hidden><p class="status warn" id="set-panel-note"></p><ul class="help" id="set-changes"></ul>
       <details><summary>Show the settings file as it will run</summary><pre id="set-yaml"></pre></details></div>
     <div id="s6-forms" style="display:flex; flex-direction:column; gap:10px">
-    <h3 style="margin:4px 0 0; font-size:15px">Classify the outcomes</h3>
+    <h3 style="margin:4px 0 0">Classify the outcomes</h3>
     <p class="help">Each outcome label in the prepared data, with the number of stays that end in it. Choose what each one means. Guesses are filled in where the label is a common one; every label needs a choice before the analysis can run.</p>
     <div class="scroll"><table id="outcome-table"></table></div>
     <p class="status" id="outcome-note"></p>
-    <h3 style="margin:8px 0 0; font-size:15px">Group the intake types</h3>
+    <h3 style="margin:8px 0 0">Group the intake types</h3>
     <p class="help">Each intake label in the prepared data, with its number of stays. Give each one a group name; labels with the same name are combined into one group, and the analysis compares the groups. Up to six groups. Tick "Leave out" to study only the other intakes.</p>
     <div class="scroll"><table id="intake-table"></table></div>
     <datalist id="intake-groups"></datalist>
     <p class="status" id="intake-note"></p>
-    <h3 style="margin:8px 0 0; font-size:15px">Set the periods</h3>
+    <h3 style="margin:8px 0 0">Set the periods</h3>
     <p class="help">mLOS compares periods within the study window. Add up to three dividing dates to split it into as many as four periods, and name each one. Choose the dates before looking at the results: at real events where there are any (a new program, a policy change), otherwise at calendar years or half-years. Aim for at least 100 outcomes in each period.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
       <span class="help">Dividing dates (each starts a new period):</span>
@@ -183,7 +212,7 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     </div>
     <div class="scroll"><table id="period-table"></table></div>
     <p class="status" id="period-note"></p>
-    <h3 style="margin:8px 0 0; font-size:15px">Group the animals</h3>
+    <h3 style="margin:8px 0 0">Group the animals</h3>
     <p class="help">Choose one of the columns carried from step 3 to compare animals by. Each of its values, with its number of stays, gets a group name; values with the same name are combined into one group. Up to six groups. Tick "Leave out" to study only the other animals.</p>
     <div class="grid2">
       <label for="group-by">Compare animals by</label>
@@ -192,20 +221,22 @@ details summary { cursor:pointer; color:var(--accent); font-size:14px; }
     <div class="scroll"><table id="group-table"></table></div>
     <datalist id="animal-groups"></datalist>
     <p class="status" id="group-note"></p>
-    <h3 style="margin:8px 0 0; font-size:15px">Set the analysis horizon</h3>
+    <h3 style="margin:8px 0 0">Set the analysis horizon</h3>
     <p class="help">The longest stay the analysis follows (<code>restricted_stay_cap</code>). A stay that reaches it counts as in care up to that day, and nothing after it is used. Too low, and real long stays are cut short; too high, and a few mistaken records can dominate the averages. Start at 365 days, then check the fraction still in care at the horizon, which the results report after the run.</p>
     <div class="grid2">
       <label for="cap">Longest stay followed (days)</label><input type="number" id="cap" value="365" min="1" step="1">
       <label for="plot-cap">Plots show days up to</label><input type="number" id="plot-cap" value="58" min="1" step="1">
     </div>
     <p class="status" id="cap-note"></p>
-    <h3 style="margin:8px 0 0; font-size:15px">Choose the reference groups</h3>
+    <h3 style="margin:8px 0 0">Choose the reference groups</h3>
     <p class="help">Each hazard ratio compares a group with its reference. The largest group is usually the right one; choose another large group if the ratios come out extreme or their intervals very wide.</p>
     <div class="grid2">
       <label for="ref-intake">Intake groups compared with</label><select id="ref-intake"></select>
       <label for="ref-group">Animal groups compared with</label><select id="ref-group"></select>
     </div>
     </div>
+    <div class="stay" id="run-stay" role="status" aria-live="assertive"><span class="icon" aria-hidden="true" id="run-stay-icon">!</span>
+      <div><strong id="run-stay-head">Stay on this tab while mLOS runs.</strong><span id="run-stay-text">Do not switch to another tab, window, or program until the results appear. Browsers slow down, and can pause, a tab that is out of sight.</span></div></div>
     <button id="run-btn">Run mLOS</button>
     <p class="status" id="s6-status"></p>
     <div id="run-results"></div>
@@ -504,7 +535,7 @@ function otherKind(text, kind) {
 }
 function forgetPrepared(why) {
   if (!prepared) return;
-  prepared = null; $('s6').classList.add('locked'); $('s7').classList.add('locked'); $('prep-results').replaceChildren();
+  prepared = null; markStale(); $('s6').classList.add('locked'); $('s7').classList.add('locked'); $('prep-results').replaceChildren();
   $('s5-status').className = 'status warn'; $('s5-status').textContent = why + ' Prepare the data again.';
 }
 function applyFiles(rebuildDates = false) {
@@ -1567,7 +1598,7 @@ function periodCheck() {
   windowEdited = true;
   refresh(false);
   if (prepared) {
-    prepared = null; $('s6').classList.add('locked'); $('prep-results').replaceChildren();
+    prepared = null; markStale(); $('s6').classList.add('locked'); $('prep-results').replaceChildren();
     $('s5-status').className = 'status warn'; $('s5-status').textContent = 'The window changed. Prepare the data again.';
   }
 }));
@@ -1697,6 +1728,44 @@ function referencesYaml() {
 }
 
 // ---------- step 7: run mLOS ----------
+// The banner above the Run button asks the user to stay on this tab. While a
+// run is going it turns red; if the tab is hidden during the run, the banner
+// and the tab's title say so, and the banner keeps saying so after the user
+// comes back, until the run ends.
+const STAY = {
+  idle: ['', 'Stay on this tab while mLOS runs.', 'Do not switch to another tab, window, or program until the results appear. Browsers slow down, and can pause, a tab that is out of sight.'],
+  running: ['running', 'mLOS is running. Stay on this tab.', 'Switching to another tab, window, or program can slow the run down or pause it. The results appear below when it finishes.'],
+  done: ['done', 'mLOS has finished.', 'The results are below. You can switch tabs now.'],
+  stale: ['stale', 'The results below are out of date.', 'A choice above has changed since they were made. Run mLOS again to bring them up to date.'],
+  left: ['left', 'You left this tab while mLOS was running.', 'The run may have slowed down while the tab was out of sight. It goes on now: stay on this tab until the results appear.'],
+};
+const pageTitle = document.title;
+let running = false, leftDuringRun = false, shownState = 'idle';
+// Any choice changed in steps 1 to 8 after a run leaves its results on the
+// page; the banner, the results, and the Run button then say they are out of date.
+function markStale() { if (!running && shownState === 'done') stayBanner('stale'); }
+for (const type of ['input', 'change']) document.addEventListener(type, (e) => {
+  if (e.target.closest && e.target.closest('#s1, #s2, #s2b, #s3, #s3b, #s4, #s5, #s6')) markStale();
+});
+function stayBanner(state) {
+  const [cls, head, text] = STAY[state];
+  $('run-stay').className = 'stay' + (cls ? ' ' + cls : '');
+  $('run-stay-icon').textContent = state === 'done' ? '\u2713' : state === 'stale' ? '\u21bb' : '!';
+  for (const id of ['run-results', 'deck-results']) $(id).classList.toggle('stale', state === 'stale');
+  $('run-btn').classList.toggle('stale', state === 'stale');
+  shownState = state;
+  $('run-stay-head').textContent = head; $('run-stay-text').textContent = ' ' + text;
+}
+function setRunning(on, state) {
+  running = on; leftDuringRun = false;
+  stayBanner(on ? 'running' : state || 'idle');
+  document.title = on ? 'Running mLOS: stay on this tab' : pageTitle;
+}
+document.addEventListener('visibilitychange', () => {
+  if (!running) return;
+  if (document.hidden) { leftDuringRun = true; document.title = 'Come back: mLOS is running'; stayBanner('left'); }
+  else document.title = 'Running mLOS: stay on this tab';
+});
 const GROUP_CAP = 6;
 let lastRunCap = null, lastRunLead = null;
 let runNo = 0;
@@ -1710,9 +1779,10 @@ $('run-btn').onclick = async () => {
   if (!ownSettings && periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
   if (horizonCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the analysis horizon first.'; return; }
   $('run-btn').disabled = true;
+  setRunning(true);
   st.className = 'status'; st.textContent = 'Waiting for R...';
   await rReady;
-  st.textContent = 'Running mLOS (keep this tab in front)...';
+  st.textContent = 'Running mLOS...';
   const out = '/out_' + (++runNo);
   const template = await (await fetch('mlos_settings_template.yaml')).text();
   const settingsText = ownSettings ? ownSettings.effective : withAnswers(
@@ -1740,7 +1810,7 @@ $('run-btn').onclick = async () => {
       })`)).toArray();
     } catch (e) {
       st.className = 'status bad'; st.textContent = 'mLOS stopped: ' + rError(e);
-      window.demo.errors.push(String(e)); $('run-btn').disabled = false;
+      window.demo.errors.push(String(e)); $('run-btn').disabled = false; setRunning(false);
       return;
     } finally { sh.purge(); }
     const over = [[n[0], PERIOD_CAP, 'periods'], [n[1], INTAKE_CAP, 'intake groups'], [n[2], GROUP_CAP, 'animal groups']].filter(([k, cap]) => k > cap);
@@ -1748,10 +1818,10 @@ $('run-btn').onclick = async () => {
       st.className = 'status bad';
       st.textContent = `This tool compares at most ${PERIOD_CAP} periods, ${INTAKE_CAP} intake groups, and ${GROUP_CAP} animal groups, and ${ownSettings.name} gives ` +
         over.map(([k, , what]) => `${k} ${what}`).join(' and ') + '. Merge some of them in the file, with its maps or its period dates.';
-      window.demo.capRefusal = st.textContent; $('run-btn').disabled = false;
+      window.demo.capRefusal = st.textContent; $('run-btn').disabled = false; setRunning(false);
       return;
     }
-    st.textContent = 'Running mLOS (keep this tab in front)...';
+    st.textContent = 'Running mLOS...';
   }
   const t0 = performance.now();
   try {
@@ -1763,11 +1833,15 @@ $('run-btn').onclick = async () => {
     st.textContent = `Finished in ${window.demo.timings.analyze} s.`;
     lastRunCap = capValue();
     lastRunLead = exportFacts() && windowLead(exportFacts());
+    const wasLeft = leftDuringRun;
+    setRunning(false, 'done');
+    if (wasLeft) st.textContent += ' The tab was out of sight for part of the run, which can make it take longer.';
     await showRun(out, group);
   } catch (e) {
     st.className = 'status bad';
     st.textContent = 'mLOS stopped: ' + (e.message || e);
     window.demo.errors.push(String(e));
+    setRunning(false);
   }
   $('run-btn').disabled = false;
 };
@@ -1805,7 +1879,7 @@ async function runChecks(out, cap, lead) {
   const led = res.data_preparation.ledger.columns, j = led.name.indexOf('overlapping_stays');
   if (j >= 0 && led.rows_affected[j] > 0) items.push({ level: 'warn', text: `${led.rows_affected[j].toLocaleString()} stays overlapped another stay of the same animal; the shorter of each pair was dropped (discard_overlapping_rows).` });
   const box = document.createElement('div');
-  box.innerHTML = '<h3 style="margin:8px 0 4px; font-size:15px">Checks on these results</h3>';
+  box.innerHTML = '<h3 style="margin:8px 0 4px">Checks on these results</h3>';
   for (const it of items) { const q = document.createElement('p'); q.className = 'status ' + it.level; q.textContent = it.text; box.append(q); }
   window.demo.runChecks = items;
   return box;
@@ -1861,7 +1935,7 @@ async function showRun(out, group) {
   const pick = document.createElement('details');
   pick.innerHTML = '<summary>Choose which plots to show</summary>';
   const list = document.createElement('div');
-  list.style.cssText = 'columns: 2 280px; font-size:13px; margin-top:8px';
+  list.style.cssText = 'columns: 2 280px; font-size:14px; margin-top:8px';
   pngs.forEach((n, k) => {
     const lab = document.createElement('label'); lab.style.display = 'block';
     lab.innerHTML = `<input type="checkbox" id="plot-${k}" ${chosenPlots.includes(n) ? 'checked' : ''}> ${n}`;
@@ -2127,7 +2201,7 @@ function showDeck(py, result) {
   const pick = document.createElement('details');
   pick.innerHTML = `<summary>Choose which tables to show (${all.length} in the workbook)</summary>`;
   const list = document.createElement('div');
-  list.style.cssText = 'columns: 2 300px; font-size:13px; margin-top:8px';
+  list.style.cssText = 'columns: 2 300px; font-size:14px; margin-top:8px';
   all.forEach((t, k) => {
     const lab = document.createElement('label');
     lab.style.display = 'block';
