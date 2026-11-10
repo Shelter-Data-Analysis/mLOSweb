@@ -56,6 +56,22 @@ details summary { cursor:pointer; color:var(--accent); font-size:15px; font-weig
 .file-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .file-row button { padding:4px 12px; font-size:14px; }
 .tnote { font-size:13px; color:var(--muted); font-style:italic; margin:4px 0 0; max-width:80ch; }
+/* A download line: where a step's files appear, each file a pill showing its
+   type and size, ticked once it has been downloaded. */
+.dl { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:6px 0 14px; padding:10px 14px; background:#e3f1ec; border:2px solid var(--accent); border-radius:8px; }
+.dl-label { display:inline-flex; align-items:center; gap:6px; font-weight:700; color:#1d4d40; margin-right:2px; }
+.dl-label svg, .save-btn svg { width:20px; height:20px; flex:none; }
+.dl-item { display:inline-flex; align-items:baseline; gap:6px; padding:6px 14px; background:#fff; border:2px solid var(--accent); border-radius:999px; color:var(--accent); font-weight:600; text-decoration:none; }
+.dl-item small { font-weight:400; font-size:13px; color:var(--muted); }
+.dl-item:hover, .dl-item:focus-visible { background:var(--accent); color:#fff; outline:none; }
+.dl-item:hover small, .dl-item:focus-visible small { color:#fff; }
+.dl-item.got::before { content:"\2713"; font-weight:800; }
+.save-btn { display:inline-flex; align-items:center; gap:8px; font-size:18px; padding:12px 22px; }
+.save-list { margin:0; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:4px; }
+.save-list li::before { display:inline-block; width:1.4em; font-weight:800; }
+.save-list li.yes::before { content:"\2713"; color:var(--ok); }
+.save-list li.no { color:var(--muted); }
+.save-list li.no::before { content:"\2013"; }
 /* The warning shown beside each long run. Browsers slow a tab that is
    behind another tab or window, so it is meant to be hard to miss. */
 .stay { display:flex; gap:14px; align-items:center; padding:14px 18px; border:3px solid #b45309; border-radius:8px; background:#fef3c7; color:#3b2405; font-size:18px; line-height:1.4; }
@@ -252,8 +268,18 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <div id="deck-results"></div>
   </section>
 
+  <section id="s9" class="locked">
+    <span class="step">Step 10</span>
+    <h2>Save everything</h2>
+    <p class="help">One zip file holding every file this page made: the prepared data, the mLOS results, and the slide deck and its tables if they were built. The ShelterDataPrep configuration and the mLOS settings file sit at the top of the zip, ready to reuse. Nothing is kept once this tab is closed or reloaded.</p>
+    <ul class="save-list" id="save-list"></ul>
+    <p class="status warn" id="save-stale" hidden>A choice has changed since the last run. The zip holds that run's files, which do not reflect the change; run mLOS again to include it.</p>
+    <button class="save-btn" id="save-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download everything</button>
+    <p class="status" id="save-status"></p>
+  </section>
+
   <section id="s8" class="locked">
-    <span class="step">Step 10 (optional)</span>
+    <span class="step">Step 11 (optional)</span>
     <h2>Share some basic stats on your study</h2>
     <p class="help">Help us improve the software by sharing some basic stats on your study. We do not track your data or your usage: this page sends nothing itself. The button opens a new email in your email program, addressed to us, holding the summary below: how the page was used and how your study was set up (counts, dates, choices, and group labels). It holds no results, no record of any animal, and no file. Delete any line you prefer not to share, and send it only if you wish. We may write back to ask whether you would share the data.</p>
     <pre id="share-preview"></pre>
@@ -536,6 +562,7 @@ function otherKind(text, kind) {
 function forgetPrepared(why) {
   if (!prepared) return;
   prepared = null; markStale(); $('s6').classList.add('locked'); $('s7').classList.add('locked'); $('prep-results').replaceChildren();
+  prepFiles = null; dropGroup('prep'); saveRefresh();
   $('s5-status').className = 'status warn'; $('s5-status').textContent = why + ' Prepare the data again.';
 }
 function applyFiles(rebuildDates = false) {
@@ -1353,6 +1380,36 @@ function fileLink(name, data, type, text) {
   a.download = name; a.textContent = text || name;
   return a;
 }
+// What the page has made and what has been downloaded, by group: 'prep',
+// 'run', and 'deck'.  Leaving the page with a group made and none of it
+// downloaded asks the browser to confirm.
+const made = new Set(), got = new Set();
+function madeGroup(g) { made.add(g); got.delete(g); }
+function dropGroup(g) { made.delete(g); got.delete(g); }
+window.addEventListener('beforeunload', (e) => {
+  if ([...made].some(g => !got.has(g))) { e.preventDefault(); e.returnValue = ''; }
+});
+const DL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>';
+const sizeText = (n) => n < 1e3 ? n + ' B' : n < 1e6 ? Math.round(n / 1e3) + ' KB' : (n / 1e6).toFixed(1) + ' MB';
+// items: [file name, contents, media type, label, kind shown beside it]
+function downloadLine(group, items) {
+  const box = document.createElement('div'); box.className = 'dl';
+  const label = document.createElement('span'); label.className = 'dl-label';
+  label.innerHTML = DL_ICON + 'Download';
+  box.append(label);
+  for (const [name, data, type, text, kind] of items) {
+    const a = fileLink(name, data, type, text);
+    a.className = 'dl-item';
+    a.append(' ');
+    const small = document.createElement('small');
+    small.textContent = `${kind}, ${sizeText(new Blob([data]).size)}`;
+    a.append(small);
+    a.title = name;
+    a.addEventListener('click', () => { a.classList.add('got'); got.add(group); });
+    box.append(a);
+  }
+  return box;
+}
 function showPrep(stats, preparedText, statsText) {
   const h = stats[0], col = (r, n) => r[h.indexOf(n)];
   const stage = stats.slice(1).filter(r => r.length > 3 && col(r, 'section') === 'stage');
@@ -1384,11 +1441,14 @@ function showPrep(stats, preparedText, statsText) {
   const sc = document.createElement('div'); sc.className = 'scroll'; sc.append(t);
   flex.append(sc);
   if (rowsP[0].includes('age_group')) flex.append(a);
-  const links = document.createElement('p'); links.className = 'help';
-  links.append('Save: ', fileLink('prepared.csv', preparedText, 'text/csv', 'the prepared data'), ', ',
-               fileLink('prepared_stats.csv', statsText, 'text/csv', 'the full step table'), ', ',
-               fileLink('shelterprep_config.yaml', preparedConfig, 'text/yaml', 'the configuration file'), '.');
-  wrap.append(flex, links);
+  prepFiles = { 'prepared.csv': preparedText, 'prepared_stats.csv': statsText, 'shelterprep_config.yaml': preparedConfig };
+  const links = downloadLine('prep', [
+    ['prepared.csv', preparedText, 'text/csv', 'The prepared data', 'CSV'],
+    ['prepared_stats.csv', statsText, 'text/csv', 'The full step table', 'CSV'],
+    ['shelterprep_config.yaml', preparedConfig, 'text/yaml', 'The configuration file', 'YAML']]);
+  wrap.append(links, flex);
+  madeGroup('prep');
+  saveRefresh();
   window.demo.preparedRows = rowsP.length - 1;
   window.demo.ageCounts = Object.fromEntries(ages);
   window.demo.detailRows = detail.length;
@@ -1754,6 +1814,7 @@ function stayBanner(state) {
   for (const id of ['run-results', 'deck-results']) $(id).classList.toggle('stale', state === 'stale');
   $('run-btn').classList.toggle('stale', state === 'stale');
   shownState = state;
+  saveRefresh();
   $('run-stay-head').textContent = head; $('run-stay-text').textContent = ' ' + text;
 }
 function setRunning(on, state) {
@@ -1903,7 +1964,8 @@ async function showRun(out, group) {
   } finally { sh.purge(); }
   window.demo.outputs = names;
   window.demo.outputDir = out;
-  lastRun = { out, names };
+  lastRun = { out, names, prep: prepFiles, settings: window.demo.settingsYaml };
+  deckFiles = null; dropGroup('deck');
   $('s7').classList.remove('locked');
   $('s8').classList.remove('locked');
   $('deck-results').replaceChildren();
@@ -1917,10 +1979,13 @@ async function showRun(out, group) {
 
   const wrap = $('run-results');
   const intro = document.createElement('p'); intro.className = 'help';
-  intro.append(`${names.length} files were written: ${pngs.length} plots, each with a CSV of its numbers, plus the Excel workbook, results.json, and the log. `,
-               fileLink('mlos_results.zip', zipBytes, 'application/zip', `Download all ${names.length} files (zip, ${(zipBytes.length / 1e6).toFixed(1)} MB)`),
-               ', with the ShelterDataPrep configuration and the mLOS settings file this run was made from. Save the settings file alone: ',
-               fileLink('mlos_settings.yaml', window.demo.settingsYaml, 'text/yaml', 'mlos_settings.yaml'), '.');
+  intro.append(`${names.length} files were written: ${pngs.length} plots, each with a CSV of its numbers, plus the Excel workbook, results.json, and the log. ` +
+               'The results zip holds all of them, with the ShelterDataPrep configuration and the mLOS settings file this run was made from.');
+  const links = downloadLine('run', [
+    ['mlos_results.zip', zipBytes, 'application/zip', `All ${names.length} result files`, 'zip'],
+    ['mlos_settings.yaml', window.demo.settingsYaml, 'text/yaml', 'The settings file', 'YAML']]);
+  madeGroup('run');
+  saveRefresh();
   const grid = document.createElement('div'); grid.className = 'plots';
   const draw = () => {
     grid.replaceChildren();
@@ -1950,7 +2015,7 @@ async function showRun(out, group) {
   reset.onclick = () => { chosenPlots = [...DEFAULT_PLOTS]; list.querySelectorAll('input').forEach((i, k) => i.checked = chosenPlots.includes(pngs[k])); draw(); };
   pick.append(list, reset);
   draw();
-  wrap.append(intro, await runChecks(out, lastRunCap, lastRunLead), grid, pick);
+  wrap.append(intro, links, await runChecks(out, lastRunCap, lastRunLead), grid, pick);
   const sd = document.createElement('details');
   sd.innerHTML = '<summary>Show the mLOS settings file</summary><pre></pre>';
   sd.querySelector('pre').textContent = window.demo.settingsYaml;
@@ -1960,12 +2025,91 @@ async function showRun(out, group) {
   d.innerHTML = '<summary>Show the mLOS log</summary><pre></pre>';
   d.querySelector('pre').textContent = log;
   wrap.append(d);
-  // A summary that cannot be written leaves step 10 without one, not the run.
+  // A summary that cannot be written leaves step 11 without one, not the run.
   try { await shareSummary(out, window.demo.timings.analyze); }
   catch (e) { shareText = ''; $('share-preview').textContent = 'The summary could not be written: ' + (e.message || e); window.demo.errors.push(String(e)); }
 }
 
-// ---------- step 10: email to the mLOS team ----------
+// ---------- step 10: save everything ----------
+// One zip of the latest run's whole set: the prepared data it was made from,
+// its results and settings, and its deck.  Before any run, the prepared data.
+let prepFiles = null, deckFiles = null;
+function saveSet() {
+  const prep = lastRun ? lastRun.prep : prepFiles;
+  return { prep, run: lastRun, deck: lastRun ? deckFiles : null };
+}
+function saveRefresh() {
+  const set = saveSet();
+  $('s9').classList.toggle('locked', !set.prep && !set.run);
+  const items = [
+    [!!set.prep, 'The prepared data, the full step table, and the ShelterDataPrep configuration', 'from step 7'],
+    [!!set.run, set.run ? `The mLOS results, ${set.run.names.length} files, with the settings file` : 'The mLOS results and settings file', 'from step 8'],
+    [!!set.deck, set.deck ? (set.deck['mlos_deck.pptx'] ? 'The slide deck and its tables workbook' : 'The tables workbook') : 'The slide deck and its tables workbook', 'from step 9'],
+  ];
+  $('save-list').innerHTML = items.map(([yes, text, where]) =>
+    `<li class="${yes ? 'yes' : 'no'}">${esc(text)} (${where}${yes ? '' : ', not made yet'})</li>`).join('');
+  $('save-stale').hidden = !(set.run && (shownState === 'stale' || !prepared));
+}
+const README_TXT = (set) => [
+  'Files made by mLOS Web, ' + new Date().toISOString().slice(0, 10) + ', from ' + exportName + '.',
+  $('versions').textContent,
+  '',
+  'shelterprep_config.yaml  the ShelterDataPrep configuration that prepared the data.',
+  set.run ? 'mlos_settings.yaml       the mLOS settings file the results were made from.' : 'mlos_settings.yaml       not made: mLOS had not been run.',
+  '1_prepared/              prepared.csv, the data ShelterDataPrep prepared; prepared_stats.csv, what each of its steps did.',
+  set.run ? '2_results/               the mLOS results: the Excel workbook, the plots with a CSV of the numbers behind each, results.json,\n                         and the log.' : '2_results/               not made: mLOS had not been run.',
+  set.deck ? '3_deck/                  the slide deck and the workbook of the tables it draws on.' : '3_deck/                  not made: the deck had not been built.',
+  '',
+  'On your own computer, shelterprep_config.yaml runs in ShelterDataPrep once its folders are pointed at your own,',
+  'and mlos_settings.yaml runs in mLOS as it is.',
+].join('\n') + '\n';
+$('save-btn').onclick = async () => {
+  const st = $('save-status'), set = saveSet();
+  $('save-btn').disabled = true;
+  st.className = 'status'; st.textContent = 'Putting the files together...';
+  try {
+    const py = await pyReady;
+    const base = 'mlos_' + (exportName.replace(/\.[^.]*$/, '').replace(/\.(csv|xlsx|xlsm)$/i, '').replace(/[^A-Za-z0-9_-]+/g, '_') || 'export') + '_' + new Date().toISOString().slice(0, 10);
+    const root = '/everything/' + base;
+    for (const d of ['1_prepared', '2_results', '3_deck']) py.FS.mkdirTree(root + '/' + d);
+    const put = (path, data) => py.FS.writeFile(root + '/' + path, typeof data === 'string' ? new TextEncoder().encode(data) : data);
+    put('README.txt', README_TXT(set));
+    // The two files that set up the run sit at the top, beside README.txt,
+    // where they are easy to find and to reuse.
+    for (const [n, d] of Object.entries(set.prep || {})) put((n.endsWith('.yaml') ? '' : '1_prepared/') + n, d);
+    if (set.run) {
+      for (const n of set.run.names) put('2_results/' + n, await webR.FS.readFile(set.run.out + '/' + n));
+      put('mlos_settings.yaml', set.run.settings);
+    }
+    for (const [n, d] of Object.entries(set.deck || {})) put('3_deck/' + n, d);
+    py.globals.set('save_root', '/everything');
+    py.globals.set('save_base', base);
+    py.runPython(`
+import os, shutil, zipfile
+target = '/everything.zip'
+with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as z:
+    for folder, _, files in os.walk(save_root):
+        for f in sorted(files):
+            full = os.path.join(folder, f)
+            z.write(full, os.path.relpath(full, save_root))
+shutil.rmtree(save_root)
+`);
+    const bytes = py.FS.readFile('/everything.zip');
+    py.FS.unlink('/everything.zip');
+    const a = fileLink(base + '.zip', bytes, 'application/zip');
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    for (const g of made) got.add(g);
+    window.demo.everything = { name: base + '.zip', bytes: bytes.length };
+    st.className = 'status ok'; st.textContent = `Downloaded ${base}.zip (${sizeText(bytes.length)}).`;
+  } catch (e) {
+    st.className = 'status bad'; st.textContent = 'Could not put the files together: ' + (e.message || e);
+    window.demo.errors.push(String(e));
+  }
+  $('save-btn').disabled = false;
+};
+
+// ---------- step 11: email to the mLOS team ----------
 // The email carries a summary of how the study was set up, read from
 // results.json: counts, dates, choices, and the group labels, with no results,
 // no record of any one animal, and no file. The user sees the text before the
@@ -2175,18 +2319,13 @@ $('deck-btn').onclick = async () => {
 
 function showDeck(py, result) {
   const wrap = $('deck-results');
-  const links = document.createElement('p');
-  links.className = 'help';
-  links.append('Download: ');
-  const files = [['mlos_deck.pptx', 'the slide deck', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
-                 ['mlos_deck_tables.xlsx', 'the tables workbook', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']]
+  const files = [['mlos_deck.pptx', 'The slide deck', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'PowerPoint'],
+                 ['mlos_deck_tables.xlsx', 'The tables workbook', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Excel']]
     .filter(([f]) => result.files.includes(f));
-  files.forEach(([f, text, type], k) => {
-    if (k) links.append(', ');
-    links.append(fileLink(f, py.FS.readFile('/deck/' + f), type, text));
-  });
-  links.append('.');
-  wrap.append(links);
+  deckFiles = Object.fromEntries(files.map(([f]) => [f, py.FS.readFile('/deck/' + f)]));
+  wrap.append(downloadLine('deck', files.map(([f, text, type, kind]) => [f, deckFiles[f], type, text, kind])));
+  madeGroup('deck');
+  saveRefresh();
 
   const all = result.tables;
   const id = (t) => t.sheet + '#' + t.index;
