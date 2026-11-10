@@ -1,0 +1,144 @@
+# Citation metadata, in the Citation File Format (https://citation-file-format.org).
+# GitHub reads this file for its "Cite this repository" button.  Zenodo reads
+# .zenodo.json instead, and ignores this file when both are present, so the
+# two carry the same version, title, authors, license, keywords, and
+# references; check_citation.py stops a build where they disagree.  The steps
+# of a release are in README.md, under "Releasing".
+#
+# `doi:` is Zenodo's concept DOI, the one that always resolves to the newest
+# release.  A release's own DOI does not exist until the release is archived,
+# by which point this file is already inside it, so there is no `doi:` field
+# until the release after the first archived one.
+
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite it as below.  Results computed with it
+  come from mLOS and ShelterDataPrep, which ran unchanged inside the page, so
+  also cite those two at the versions the page's footer reports.
+title: "mLOSweb"
+abstract: >-
+  A web page that runs ShelterDataPrep and mLOS inside the browser, for animal
+  shelters without an R or Python installation.  The user loads an export of
+  the shelter's stays, as a CSV file or an Excel workbook, answers a few
+  questions about it, and gets the mLOS plots, tables, workbook, and slide
+  deck.  The data is not uploaded anywhere.  ShelterDataPrep runs in Pyodide
+  (Python compiled to WebAssembly) and mLOS in webR (R compiled to
+  WebAssembly).  The page runs a subset of mLOS: it leaves out the Weibull
+  regression and the confidence bounds of the conditional outcome curves, and
+  compares at most four periods, six intake groups, and six animal groups.
+type: software
+authors:
+  - family-names: "Mavrovouniotis"
+    given-names: "Michael Loizos"
+    orcid: "https://orcid.org/0009-0009-9896-2761"
+version: "0.1.0"
+date-released: "2026-11-10"
+license: MIT
+repository-code: "https://github.com/Shelter-Data-Analysis/mLOSweb"
+url: "https://shelter-data-analysis.github.io/mLOSweb/"
+keywords:
+  - animal shelter
+  - length of stay
+  - survival analysis
+  - WebAssembly
+  - webR
+  - Pyodide
+
+# What the page runs and the demo exports it offers.  Software is cited by its
+# concept DOI, with the version pins.py names in the notes; data by its
+# version DOI, as the deposit that holds the exact bytes the build checks.
+# If a record's own title or author list changes, change it here too.
+references:
+  - type: software
+    title: "mLOS"
+    authors:
+      - family-names: "Mavrovouniotis"
+        given-names: "Michael Loizos"
+        orcid: "https://orcid.org/0009-0009-9896-2761"
+    doi: "10.5281/zenodo.22083814"
+    year: 2026
+    license: MIT
+    repository-code: "https://github.com/Shelter-Data-Analysis/mLOS"
+    notes: >-
+      The analysis, run unchanged in webR at the commit pins.py names.
+  - type: article
+    title: >-
+      The mLOS Open-Source Software for Analyzing Length of Stay in Animal
+      Shelters
+    authors:
+      - family-names: "Mavrovouniotis"
+        given-names: "Michael Loizos"
+        orcid: "https://orcid.org/0009-0009-9896-2761"
+    journal: "Animals"
+    volume: 16
+    issue: "20"
+    start: 3207
+    year: 2026
+    doi: "10.3390/ani16203207"
+    notes: >-
+      The paper describing mLOS and its design.
+  - type: software
+    title: "ShelterDataPrep"
+    authors:
+      - family-names: "Mavrovouniotis"
+        given-names: "Michael Loizos"
+        orcid: "https://orcid.org/0009-0009-9896-2761"
+    doi: "10.5281/zenodo.22051338"
+    year: 2026
+    license: MIT
+    repository-code: "https://github.com/Shelter-Data-Analysis/ShelterDataPrep"
+    notes: >-
+      The data preparation, run unchanged in Pyodide at the commit pins.py
+      names.
+  - type: software
+    title: "Pyodide"
+    authors:
+      - name: "The Pyodide development team"
+    doi: "10.5281/zenodo.5135071"
+    version: "0.29.5"
+    license: MPL-2.0
+    repository-code: "https://github.com/pyodide/pyodide"
+    notes: >-
+      Python compiled to WebAssembly, loaded by the page from its public
+      distribution.
+  - type: software
+    title: "webR"
+    authors:
+      - name: "The webR authors"
+    version: "0.6.0"
+    repository-code: "https://github.com/r-wasm/webr"
+    notes: >-
+      R compiled to WebAssembly, built into the site.  Its distribution
+      binaries are under the GNU General Public License, version 3.  No DOI
+      was found for it, so it is cited by its repository and version.
+  - type: data
+    title: >-
+      Animal-level intake and outcome data for Irvine Animal Care Center, for
+      outcomes from January 1 2018 to early October 2025
+    authors:
+      - family-names: "Mavrovouniotis"
+        given-names: "Michael"
+    doi: "10.6084/m9.figshare.34875669.v2"
+    version: "2"
+    year: 2026
+    license: CC-BY-4.0
+    notes: >-
+      The source of the Irvine Animal Care Center workbook of 2025-10-08, one
+      of the demo exports.  A run over your own shelter's data has nothing to
+      do with this deposit and should not cite it.
+  - type: data
+    title: >-
+      Raw animal-level data from government-operated animal shelters in Orange
+      County and Los Angeles County, California
+    authors:
+      - family-names: "Mavrovouniotis"
+        given-names: "Michael Loizos"
+        orcid: "https://orcid.org/0009-0009-9896-2761"
+    doi: "10.5281/zenodo.22051091"
+    version: "1"
+    year: 2026
+    license: CC-BY-4.0
+    notes: >-
+      The source of the demo exports CIall_raw.csv.gz and MV_raw.csv.gz.  A run
+      over your own shelter's data has nothing to do with this deposit and
+      should not cite it.

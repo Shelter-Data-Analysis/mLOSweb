@@ -1,0 +1,25 @@
+# Check that CITATION.cff, .zenodo.json, and pins.py agree, on every push and
+# pull request, and on every tag, where it also checks that the tag names the
+# same version.  It runs apart from the publishing workflow, so a disagreement
+# never stops the site from being published.
+name: Check the citation metadata
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: python3 check_citation.py
