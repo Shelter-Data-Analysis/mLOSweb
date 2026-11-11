@@ -1806,9 +1806,12 @@ const pageTitle = document.title;
 let running = false, leftDuringRun = false, shownState = 'idle';
 // Any choice changed in steps 1 to 8 after a run leaves its results on the
 // page; the banner, the results, and the Run button then say they are out of date.
+// The results themselves sit inside step 8, and choosing which plots to show
+// there changes nothing the run was made from.
 function markStale() { if (!running && shownState === 'done') stayBanner('stale'); }
 for (const type of ['input', 'change']) document.addEventListener(type, (e) => {
-  if (e.target.closest && e.target.closest('#s1, #s2, #s2b, #s3, #s3b, #s4, #s5, #s6')) markStale();
+  if (e.target.closest && e.target.closest('#s1, #s2, #s2b, #s3, #s3b, #s4, #s5, #s6') &&
+      !e.target.closest('#run-results')) markStale();
 });
 function stayBanner(state) {
   const [cls, head, text] = STAY[state];
