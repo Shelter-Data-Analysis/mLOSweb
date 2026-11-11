@@ -1,20 +1,66 @@
 # Citation metadata, in the Citation File Format (https://citation-file-format.org).
-# GitHub reads this file for its "Cite this repository" button.  Zenodo reads
-# .zenodo.json instead, and ignores this file when both are present, so the
-# two carry the same version, title, authors, license, keywords, and
-# references; check_citation.py stops a build where they disagree.  The steps
-# of a release are in README.md, under "Releasing".
+# GitHub reads this and shows a "Cite this repository" button.  Zenodo reads
+# .zenodo.json instead when minting a DOI from a release, and ignores this file
+# while that one exists; check_citation.py holds the fields the two share
+# equal, and the citation workflow runs it on every push, pull request, and
+# tag.  The steps of a release are in README.md, under "Releasing".
 #
-# `doi:` is Zenodo's concept DOI, the one that always resolves to the newest
-# release.  A release's own DOI does not exist until the release is archived,
-# by which point this file is already inside it, so there is no `doi:` field
-# until the release after the first archived one.
+####   RELEASE CHECKLIST.  These are the steps that go wrong inside this file.
+####
+####   1. Zenodo is switched on for this repository.  It archives releases
+####      made after it is switched on and does not reach back for earlier
+####      ones.
+####   2. On each tagged release, bump `version` and `date-released` to match,
+####      and in .zenodo.json bump `version`, the version in `title`, and the
+####      tag in the GitHub tree link.  This file is where mLOSweb's version
+####      is written; check_citation.py holds all four equal to `version`
+####      here, and in a tag build holds the tag equal to `v` plus `version`,
+####      the tag the tree link names.
+####   3. Check the date in UTC (`TZ=UTC date +%F`) before tagging.  GitHub
+####      stamps tags in UTC and Zenodo dates records in Geneva local time, so
+####      an evening tag on the United States west coast lands on the next day
+####      in both of them and disagrees with what is written here.
+####   4. For `doi:`, use Zenodo's CONCEPT DOI, the version-independent one
+####      that always resolves to the newest release, not the DOI of a single
+####      release.  A release's own DOI does not exist until that release is
+####      archived, by which point this file is already inside it, so it could
+####      only ever name the release before.  The concept DOI is stable, and
+####      `version` above is what says which release was actually run.  There
+####      is therefore no `doi:` field until the release after the first
+####      archived one.
+####   5. AFTER publishing a release, check the Zenodo record against
+####      .zenodo.json: title `mLOSweb (Version X.Y.Z)`, version `X.Y.Z`
+####      without a `v`, the related works, and the two references.  Without
+####      that file Zenodo takes the version from the tag name, and a related
+####      work or reference entered on one version's record does not carry to
+####      the next.  A field name Zenodo does not know is dropped without
+####      notice, so check in the Zenodo interface at the time.  Zenodo fails
+####      the archive on a .zenodo.json it cannot read; check_citation.py
+####      checks that the file parses and uses only the field and relation
+####      names Zenodo accepts.
+#
+####   A related work or reference is added, changed, or removed in
+####   .zenodo.json before tagging, not on the Zenodo record: Zenodo rebuilds
+####   each version's record from that file, so an edit made on the record is
+####   lost at the next release.
+#
+####   The related works name mLOS and ShelterDataPrep by their CONCEPT DOIs,
+####   10.5281/zenodo.22083814 and 10.5281/zenodo.22051338, with the relation
+####   "requires": the page cannot run without them, and which version it runs
+####   is pins.py's business, so the relation stays the same across releases.
+####   Pyodide and webR are "requires" for the same reason.  The demo exports'
+####   deposits and the mLOS paper are "references", and the live page is
+####   what the record "is source of".
+#
+####   .zenodo.json names no license, so Zenodo takes the record's from the
+####   repository's LICENSE file.
 
 cff-version: 1.2.0
 message: >-
-  If you use this software, please cite it as below.  Results computed with it
-  come from mLOS and ShelterDataPrep, which ran unchanged inside the page, so
-  also cite those two at the versions the page's footer reports.
+  If you use this software, please cite it with the version you ran.  Results
+  computed with it come from mLOS and ShelterDataPrep, which ran unchanged
+  inside the page, so also cite those two at the versions the page's footer
+  reports.
 title: "mLOSweb"
 abstract: >-
   A web page that runs ShelterDataPrep and mLOS inside the browser, for animal

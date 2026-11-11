@@ -1,6 +1,6 @@
 {
   "upload_type": "software",
-  "title": "mLOSweb",
+  "title": "mLOSweb (Version 0.1.0)",
   "version": "0.1.0",
   "creators": [
     {
@@ -8,10 +8,8 @@
       "orcid": "0009-0009-9896-2761"
     }
   ],
-  "description": "<p>A web page that runs ShelterDataPrep and mLOS inside the browser, for animal shelters without an R or Python installation. The user loads an export of the shelter's stays, as a CSV file or an Excel workbook, answers a few questions about it, and gets the mLOS plots, tables, workbook, and slide deck. The data is not uploaded anywhere. ShelterDataPrep runs in Pyodide (Python compiled to WebAssembly) and mLOS in webR (R compiled to WebAssembly), both unchanged.</p><p>The page runs a subset of mLOS: it leaves out the Weibull regression and the confidence bounds of the conditional outcome curves, and compares at most four periods, six intake groups, and six animal groups. The full mLOS runs on the user's own computer; see its record, 10.5281/zenodo.22083814.</p><p>The running page is at <a href=\"https://shelter-data-analysis.github.io/mLOSweb/\">https://shelter-data-analysis.github.io/mLOSweb/</a>. This record holds its source: the page template, pins.py (the exact versions of mLOS, ShelterDataPrep, webR, Pyodide, the R and Python packages, and the demo exports, with their checksums), and the scripts that download them and build the site. <code>python3 build_site.py</code> and then <code>python3 serve.py</code> build the site and serve it on the user's own computer, as the README describes.</p>",
-  "notes": "Results computed with this page come from mLOS and ShelterDataPrep, which run unchanged inside it, so cite those two as well, at the versions the page's footer reports.",
-  "access_right": "open",
-  "license": "mit",
+  "description": "A web page that runs ShelterDataPrep and mLOS inside the browser, for animal shelters without an R or Python installation.  The user loads an export of the shelter's stays, as a CSV file or an Excel workbook, answers a few questions about it, and gets the mLOS plots, tables, workbook, and slide deck.  The data is not uploaded anywhere.  ShelterDataPrep runs in Pyodide (Python compiled to WebAssembly) and mLOS in webR (R compiled to WebAssembly).  The page runs a subset of mLOS: it leaves out the Weibull regression and the confidence bounds of the conditional outcome curves, and compares at most four periods, six intake groups, and six animal groups.",
+  "notes": "If you use this software, please cite it with the version you ran.  Results computed with it come from mLOS and ShelterDataPrep, which ran unchanged inside the page, so also cite those two at the versions the page's footer reports.",
   "keywords": [
     "animal shelter",
     "length of stay",
@@ -22,55 +20,53 @@
   ],
   "related_identifiers": [
     {
+      "identifier": "https://github.com/Shelter-Data-Analysis/mLOSweb/tree/v0.1.0",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    },
+    {
       "identifier": "https://shelter-data-analysis.github.io/mLOSweb/",
       "relation": "isSourceOf",
-      "scheme": "url",
       "resource_type": "other"
     },
     {
       "identifier": "10.5281/zenodo.22083814",
       "relation": "requires",
-      "scheme": "doi",
       "resource_type": "software"
     },
     {
       "identifier": "10.5281/zenodo.22051338",
       "relation": "requires",
-      "scheme": "doi",
       "resource_type": "software"
     },
     {
       "identifier": "10.5281/zenodo.5135071",
       "relation": "requires",
-      "scheme": "doi",
       "resource_type": "software"
     },
     {
       "identifier": "https://github.com/r-wasm/webr",
       "relation": "requires",
-      "scheme": "url",
       "resource_type": "software"
     },
     {
       "identifier": "10.3390/ani16203207",
       "relation": "references",
-      "scheme": "doi",
       "resource_type": "publication-article"
     },
     {
       "identifier": "10.6084/m9.figshare.34875669.v2",
       "relation": "references",
-      "scheme": "doi",
       "resource_type": "dataset"
     },
     {
       "identifier": "10.5281/zenodo.22051091",
       "relation": "references",
-      "scheme": "doi",
       "resource_type": "dataset"
     }
   ],
   "references": [
+    "Mavrovouniotis ML. Use of Kaplan-Meier and Cox regressions in the distribution of length of stay in animal shelters for pre-specified calendar periods: Definition, computation, and examples of dog length of stay in Orange County California. PLOS ONE. 2026;21(1):e0342102. doi:10.1371/journal.pone.0342102",
     "Mavrovouniotis ML. The mLOS Open-Source Software for Analyzing Length of Stay in Animal Shelters. Animals. 2026;16(20):3207. doi:10.3390/ani16203207"
   ]
 }

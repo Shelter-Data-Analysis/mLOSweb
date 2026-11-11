@@ -21,7 +21,7 @@ An export is often cut by date: by intake date, holding the animals admitted in 
 | `.github/workflows/pages.yml` | Builds the site and publishes it to GitHub Pages on every push to `main` |
 | `CITATION.cff` | Citation metadata, for GitHub's "Cite this repository" button |
 | `.zenodo.json` | The same metadata in the form Zenodo reads when it archives a release, with the related works it lists |
-| `check_citation.py` | Checks that `CITATION.cff`, `.zenodo.json`, and `pins.py` agree, and, in a tag build, that the tag names the same version |
+| `check_citation.py` | Checks that `CITATION.cff`, `.zenodo.json`, and `pins.py` agree, that `.zenodo.json` uses only names Zenodo reads, and, in a tag build, that the tag names the same version |
 | `.github/workflows/citation.yml` | Runs `check_citation.py` on every push, pull request, and tag, apart from publishing |
 
 No program's code, webR, the packages, nor the demo data is stored in this repository; each build downloads them at the versions in `pins.py`. Downloads are kept in `.cache/`, so a second build is fast.
@@ -53,12 +53,12 @@ A new version of Pyodide or webR, or a demo export from a new deposit, also chan
 
 ## Releasing
 
-Zenodo archives each GitHub release of this repository and gives it a DOI. It builds the record from `.zenodo.json` alone: title, version, author, description, license, keywords, and related works. Nothing is entered by hand on Zenodo.
+Zenodo archives each GitHub release of this repository and gives it a DOI. It builds the record from `.zenodo.json` alone: title, version, author, description, notes, keywords, related works, and references, with the license read from `LICENSE`. Nothing is entered by hand on Zenodo. The checklist at the top of `CITATION.cff` gives the reasons behind these steps.
 
-1. In `CITATION.cff`, set `version` and `date-released`, the date in UTC (`TZ=UTC date +%F`), since GitHub stamps tags in UTC. In `.zenodo.json`, set `version` to the same version.
+1. In `CITATION.cff`, set `version` and `date-released`, the date in UTC (`TZ=UTC date +%F`), since GitHub stamps tags in UTC. In `.zenodo.json`, set `version`, the version in `title`, and the tag in the GitHub tree link to the same version.
 2. Run `python3 check_citation.py`, then commit and push to `main`.
-3. On GitHub, create a release whose tag is the version, such as `0.1.0`. The record's description comes from `.zenodo.json`, not from the release notes.
-4. When Zenodo has archived it, check the record: the version with no leading `v`, the related works, and the license.
+3. On GitHub, create a release whose tag is `v` followed by the version, such as `v0.1.0`, the tag the tree link names. The record's description comes from `.zenodo.json`, not from the release notes.
+4. When Zenodo has archived it, check the record: the title `mLOSweb (Version X.Y.Z)`, the version with no leading `v`, the related works, the two references, and the license.
 5. After the first archived release, add Zenodo's concept DOI, the one that resolves to the newest release, as `doi:` in `CITATION.cff` and as a link in this README.
 
 The repository is switched on in Zenodo; Zenodo archives no release made before that.
