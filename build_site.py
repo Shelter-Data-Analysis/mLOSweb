@@ -161,6 +161,15 @@ def demo_data() -> list[dict]:
     return demos
 
 
+def site_version() -> str:
+    """mLOSweb's own version, as CITATION.cff states it, the one place it is
+    written; the page's footer names it beside the versions of the programs."""
+    found = re.search(r'^version:\s*"([^"]+)"\s*$', (HERE / "CITATION.cff").read_text(), flags=re.M)
+    if not found:
+        sys.exit('CITATION.cff has no line of the form version: "X.Y.Z", so the page cannot name its version.')
+    return found.group(1)
+
+
 def site_commit() -> str:
     """The mLOSweb commit the site is built from, with "+changes" when the
     working tree differs from it, so a run summary names the page it came from."""
@@ -175,12 +184,14 @@ def site_commit() -> str:
 
 
 def main() -> None:
+    version = site_version()
     if SITE.exists():
         shutil.rmtree(SITE)
     for source in (HERE / "web").iterdir():
         text = source.read_bytes()
         if source.suffix == ".html":
             text = text.replace(b"{{PYODIDE_VERSION}}", pins.PYODIDE_VERSION.encode())
+            text = text.replace(b"{{MLOSWEB_VERSION}}", version.encode())
         write(SITE / source.name, text)
     mlos_files, review_files, mlos_version = mlos()
     sdp_files, sdp_version = shelterprep()

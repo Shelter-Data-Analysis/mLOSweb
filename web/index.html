@@ -304,7 +304,8 @@ const mark = (k, t0) => { window.demo.timings[k] = Math.round(performance.now() 
 const manifest = await (await fetch('manifest.json')).json();
 const SDP_FILES = manifest.shelterprep.files;
 const MLOS_FILES = manifest.mlos.files;
-$('versions').textContent = `mLOS ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)}), ` +
+$('versions').textContent = `mLOSweb {{MLOSWEB_VERSION}} (commit ${manifest.site_commit}), ` +
+  `mLOS ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)}), ` +
   `ShelterDataPrep ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)}), ` +
   `webR ${manifest.webr}, Pyodide ${manifest.pyodide}.`;
 

@@ -13,9 +13,10 @@
 ####   2. On each tagged release, bump `version` and `date-released` to match,
 ####      and in .zenodo.json bump `version`, the version in `title`, and the
 ####      tag in the GitHub tree link.  This file is where mLOSweb's version
-####      is written; check_citation.py holds all four equal to `version`
-####      here, and in a tag build holds the tag equal to `v` plus `version`,
-####      the tag the tree link names.
+####      is written; build_site.py reads it for the page's footer, which a
+####      reader cites from, and check_citation.py holds all four equal to
+####      `version` here, and in a tag build holds the tag equal to `v` plus
+####      `version`, the tag the tree link names.
 ####   3. Check the date in UTC (`TZ=UTC date +%F`) before tagging.  GitHub
 ####      stamps tags in UTC and Zenodo dates records in Geneva local time, so
 ####      an evening tag on the United States west coast lands on the next day
