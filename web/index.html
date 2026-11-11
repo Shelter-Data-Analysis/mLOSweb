@@ -48,6 +48,7 @@ details summary { cursor:pointer; color:var(--accent); font-size:15px; font-weig
 .plots { display:grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap:14px; }
 .plots figure { margin:0; font-size:13px; color:var(--muted); }
 .plots img { width:100%; border:1px solid var(--line); border-radius:4px; background:#fff; }
+.plot-dl { margin:2px 0 0; }
 .runtime { font-size:14px; color:var(--muted); }
 .deck-tables { display:flex; flex-direction:column; gap:18px; }
 .deck-tables h4 { margin:0 0 4px; font-size:16px; }
@@ -1974,14 +1975,31 @@ async function showRun(out, group) {
   $('s7-status').textContent = '';
   window.demo.webR = webR;
   const pngs = names.filter(n => n.endsWith('.png'));
-  const images = {};
-  for (const n of pngs) images[n] = URL.createObjectURL(new Blob([await webR.FS.readFile(out + '/' + n)], { type: 'image/png' }));
+  const images = {}, pngBytes = {};
+  for (const n of pngs) {
+    pngBytes[n] = await webR.FS.readFile(out + '/' + n);
+    images[n] = URL.createObjectURL(new Blob([pngBytes[n]], { type: 'image/png' }));
+  }
+  // Each plot's CSV, as mLOS's own list of outputs pairs them. A stacked plot
+  // draws numbers another plot's CSV holds, and has none of its own.
+  const outputs = JSON.parse(new TextDecoder().decode(await webR.FS.readFile(out + '/results.json'))).outputs || [];
+  const csvOf = {}, csvBytes = {}, csvUrls = {};
+  for (const o of outputs) {
+    if (o.plot && o.csv && names.includes(o.csv)) {
+      csvOf[o.plot] = o.csv;
+      csvBytes[o.csv] = await webR.FS.readFile(out + '/' + o.csv);
+      csvUrls[o.csv] = URL.createObjectURL(new Blob([csvBytes[o.csv]], { type: 'text/csv' }));
+    }
+  }
+  window.demo.plotCsv = csvOf;
   const zipBytes = await webR.FS.readFile('/tmp/mlos_results.zip');
   window.demo.zipBytes = zipBytes.length;
 
   const wrap = $('run-results');
   const intro = document.createElement('p'); intro.className = 'help';
-  intro.append(`${names.length} files were written: ${pngs.length} plots, each with a CSV of its numbers, plus the Excel workbook, results.json, and the log. ` +
+  const withCsv = pngs.filter(n => csvOf[n]).length;
+  intro.append(`${names.length} files were written: ${pngs.length} plots, ${withCsv === pngs.length ? 'each with a CSV of its numbers' : `${withCsv} of them with a CSV of their numbers`}, plus the Excel workbook, results.json, and the log. ` +
+               'Each plot shown below has links to download it and its CSV. ' +
                'The results zip holds all of them, with the ShelterDataPrep configuration and the mLOS settings file this run was made from.');
   const links = downloadLine('run', [
     ['mlos_results.zip', zipBytes, 'application/zip', `All ${names.length} result files`, 'zip'],
@@ -1995,6 +2013,18 @@ async function showRun(out, group) {
       const fig = document.createElement('figure');
       fig.innerHTML = `<img alt="${n}"><figcaption>${n}</figcaption>`;
       fig.querySelector('img').src = images[n];
+      // Downloads of one plot do not count as saving the run: the page still
+      // asks before leaving until the zip or the settings file is downloaded.
+      const dl = document.createElement('p'); dl.className = 'plot-dl';
+      const link = (name, url, text) => {
+        const a = document.createElement('a');
+        a.href = url; a.download = name; a.title = name; a.textContent = text;
+        return a;
+      };
+      dl.append('Download: ', link(n, images[n], 'picture'), ` (PNG, ${sizeText(pngBytes[n].length)})`);
+      const csv = csvOf[n];
+      if (csv) dl.append(' · ', link(csv, csvUrls[csv], 'numbers'), ` (CSV, ${sizeText(csvBytes[csv].length)})`);
+      fig.append(dl);
       grid.append(fig);
     }
     window.demo.shown = chosenPlots.filter(n => images[n]);
