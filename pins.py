@@ -1,16 +1,19 @@
 """The exact versions the site is assembled from.
 
 `build_site.py` reads this file and nothing else to decide what to download, so
-a change of version is a change here and nowhere else. Each entry is checked as
-it is fetched, and a download that does not match stops the build.
+a change of version is a change here and nowhere else. The PyPI wheels and the
+demo exports carry a digest, checked as each is fetched, and a download that
+does not match stops the build. The two programs are named by commit hash, and
+webR and the R packages by version.
 """
 
 # The two programs, as commits of their public repositories under
-# github.com/Shelter-Data-Analysis. A release replaces each commit with the
-# release's tag. The mLOS commit supplies both the R analysis and the deck
-# builder, mlos_review.
-MLOS_REF = "dc8ec2de616a4fccb7a4b893428276c02c2eeb7d"
-SDP_REF = "c539d45b81cf52eecfa68b01456392e11ec65290"
+# github.com/Shelter-Data-Analysis. Each names the full hash of the commit a
+# release tag points to, not the tag: a tag can be moved and a hash cannot,
+# and the downloads are not checked against a digest. The mLOS commit
+# supplies both the R analysis and the deck builder, mlos_review.
+MLOS_REF = "57deba11cf364746b4ae54e040a35e8d9b3ec427"  # mLOS v0.5.0
+SDP_REF = "438a6613331617282ddf2702903562d8d17eb281"  # ShelterDataPrep v0.5.1
 
 # webR, the build of R for WebAssembly, from its npm package. Its R version
 # decides which directory of repo.r-wasm.org the packages come from.

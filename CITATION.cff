@@ -65,8 +65,9 @@ message: >-
 title: "mLOSweb"
 abstract: >-
   A web page that runs ShelterDataPrep and mLOS inside the browser, for animal
-  shelters without an R or Python installation.  The user loads an export of
-  the shelter's stays, as a CSV file or an Excel workbook, answers a few
+  shelters without an R or Python installation, at
+  https://shelter-data-analysis.github.io/mLOSweb/.  The user loads an export
+  of the shelter's stays, as a CSV file or an Excel workbook, answers a few
   questions about it, and gets the mLOS plots, tables, workbook, and slide
   deck.  The data is not uploaded anywhere.  ShelterDataPrep runs in Pyodide
   (Python compiled to WebAssembly) and mLOS in webR (R compiled to
@@ -79,7 +80,7 @@ authors:
     given-names: "Michael Loizos"
     orcid: "https://orcid.org/0009-0009-9896-2761"
 version: "0.1.0"
-date-released: "2026-11-10"
+date-released: "2026-11-11"
 license: MIT
 repository-code: "https://github.com/Shelter-Data-Analysis/mLOSweb"
 url: "https://shelter-data-analysis.github.io/mLOSweb/"

@@ -8,7 +8,7 @@
       "orcid": "0009-0009-9896-2761"
     }
   ],
-  "description": "A web page that runs ShelterDataPrep and mLOS inside the browser, for animal shelters without an R or Python installation.  The user loads an export of the shelter's stays, as a CSV file or an Excel workbook, answers a few questions about it, and gets the mLOS plots, tables, workbook, and slide deck.  The data is not uploaded anywhere.  ShelterDataPrep runs in Pyodide (Python compiled to WebAssembly) and mLOS in webR (R compiled to WebAssembly).  The page runs a subset of mLOS: it leaves out the Weibull regression and the confidence bounds of the conditional outcome curves, and compares at most four periods, six intake groups, and six animal groups.",
+  "description": "A web page that runs ShelterDataPrep and mLOS inside the browser, for animal shelters without an R or Python installation, at https://shelter-data-analysis.github.io/mLOSweb/.  The user loads an export of the shelter's stays, as a CSV file or an Excel workbook, answers a few questions about it, and gets the mLOS plots, tables, workbook, and slide deck.  The data is not uploaded anywhere.  ShelterDataPrep runs in Pyodide (Python compiled to WebAssembly) and mLOS in webR (R compiled to WebAssembly).  The page runs a subset of mLOS: it leaves out the Weibull regression and the confidence bounds of the conditional outcome curves, and compares at most four periods, six intake groups, and six animal groups.",
   "notes": "If you use this software, please cite it with the version you ran.  Results computed with it come from mLOS and ShelterDataPrep, which ran unchanged inside the page, so also cite those two at the versions the page's footer reports.",
   "keywords": [
     "animal shelter",
