@@ -49,7 +49,7 @@ A new version of Pyodide or webR, or a demo export from a new deposit, also chan
 
 ## Citing
 
-`CITATION.cff` gives the citation for this page. Results computed with it come from mLOS and ShelterDataPrep, which run unchanged inside it, so a work that reports them also cites those two, at the versions the page's footer reports.
+mLOSweb is archived at [10.5281/zenodo.24124646](https://doi.org/10.5281/zenodo.24124646). Cite that with the version the page's footer reports: the DOI resolves to the newest release. `CITATION.cff` gives the citation for this page. Results computed with it come from mLOS and ShelterDataPrep, which run unchanged inside it, so a work that reports them also cites those two, at the versions the page's footer reports.
 
 ## Releasing
 

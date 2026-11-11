@@ -82,6 +82,7 @@ authors:
 version: "0.1.0"
 date-released: "2026-11-11"
 license: MIT
+doi: "10.5281/zenodo.24124646"
 repository-code: "https://github.com/Shelter-Data-Analysis/mLOSweb"
 url: "https://shelter-data-analysis.github.io/mLOSweb/"
 keywords:
