@@ -49,6 +49,8 @@ details summary { cursor:pointer; color:var(--accent); font-size:15px; font-weig
 .plots figure { margin:0; font-size:13px; color:var(--muted); }
 .plots img { width:100%; border:1px solid var(--line); border-radius:4px; background:#fff; }
 .plot-dl { margin:2px 0 0; }
+.plot-file { display:block; font-size:15px; color:var(--fg); overflow-wrap:anywhere; }
+.plot-title { display:block; font-size:13px; }
 .runtime { font-size:14px; color:var(--muted); }
 .deck-tables { display:flex; flex-direction:column; gap:18px; }
 .deck-tables h4 { margin:0 0 4px; font-size:16px; }
@@ -1986,8 +1988,11 @@ async function showRun(out, group) {
   // Each plot's CSV, as mLOS's own list of outputs pairs them. A stacked plot
   // draws numbers another plot's CSV holds, and has none of its own.
   const outputs = JSON.parse(new TextDecoder().decode(await webR.FS.readFile(out + '/results.json'))).outputs || [];
-  const csvOf = {}, csvBytes = {}, csvUrls = {};
+  // Each plot's title, as mLOS drew it on the figure and records it in the
+  // same list. A run of an mLOS that records none leaves the file name alone.
+  const csvOf = {}, csvBytes = {}, csvUrls = {}, titleOf = {};
   for (const o of outputs) {
+    if (o.plot && typeof o.title === 'string' && o.title) titleOf[o.plot] = o.title;
     if (o.plot && o.csv && names.includes(o.csv)) {
       csvOf[o.plot] = o.csv;
       csvBytes[o.csv] = await webR.FS.readFile(out + '/' + o.csv);
@@ -1995,6 +2000,7 @@ async function showRun(out, group) {
     }
   }
   window.demo.plotCsv = csvOf;
+  window.demo.plotTitles = titleOf;
   const zipBytes = await webR.FS.readFile('/tmp/mlos_results.zip');
   window.demo.zipBytes = zipBytes.length;
 
@@ -2014,8 +2020,16 @@ async function showRun(out, group) {
     grid.replaceChildren();
     for (const n of chosenPlots.filter(n => images[n])) {
       const fig = document.createElement('figure');
-      fig.innerHTML = `<img alt="${n}"><figcaption>${n}</figcaption>`;
-      fig.querySelector('img').src = images[n];
+      // The file name, as the zip and a native run name it, and under it the
+      // title the figure itself carries: no second name for the plot.
+      fig.innerHTML = '<img><figcaption><span class="plot-file"></span></figcaption>';
+      const img = fig.querySelector('img');
+      img.src = images[n]; img.alt = titleOf[n] || n;
+      fig.querySelector('.plot-file').textContent = n;
+      if (titleOf[n]) {
+        const t = document.createElement('span'); t.className = 'plot-title'; t.textContent = titleOf[n];
+        fig.querySelector('figcaption').append(t);
+      }
       // Downloads of one plot do not count as saving the run: the page still
       // asks before leaving until the zip or the settings file is downloaded.
       const dl = document.createElement('p'); dl.className = 'plot-dl';
