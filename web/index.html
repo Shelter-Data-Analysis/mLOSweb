@@ -51,6 +51,10 @@ details summary { cursor:pointer; color:var(--accent); font-size:15px; font-weig
 .plot-dl { margin:2px 0 0; }
 .plot-file { display:block; font-size:15px; color:var(--fg); overflow-wrap:anywhere; }
 .plot-title { display:block; font-size:13px; }
+.plot-pick { display:flex; gap:6px; align-items:flex-start; margin:0 0 6px; break-inside:avoid; }
+.plot-pick input { margin-top:4px; }
+.plot-pick .plot-file { font-size:14px; }
+.plot-pick .plot-title { color:var(--muted); }
 .runtime { font-size:14px; color:var(--muted); }
 .deck-tables { display:flex; flex-direction:column; gap:18px; }
 .deck-tables h4 { margin:0 0 4px; font-size:16px; }
@@ -2051,8 +2055,15 @@ async function showRun(out, group) {
   const list = document.createElement('div');
   list.style.cssText = 'columns: 2 280px; font-size:14px; margin-top:8px';
   pngs.forEach((n, k) => {
-    const lab = document.createElement('label'); lab.style.display = 'block';
-    lab.innerHTML = `<input type="checkbox" id="plot-${k}" ${chosenPlots.includes(n) ? 'checked' : ''}> ${n}`;
+    // The title under the file name, as in the captions: here it is all a
+    // reader has to go on in choosing a plot not yet shown.
+    const lab = document.createElement('label'); lab.className = 'plot-pick';
+    lab.innerHTML = `<input type="checkbox" id="plot-${k}" ${chosenPlots.includes(n) ? 'checked' : ''}><span><span class="plot-file"></span></span>`;
+    lab.querySelector('.plot-file').textContent = n;
+    if (titleOf[n]) {
+      const t = document.createElement('span'); t.className = 'plot-title'; t.textContent = titleOf[n];
+      lab.querySelector('span').append(t);
+    }
     lab.querySelector('input').onchange = (e) => {
       chosenPlots = e.target.checked ? [...chosenPlots, n] : chosenPlots.filter(x => x !== n);
       draw();
