@@ -69,9 +69,4 @@ DEMOS = [
      "doi": "10.5281/zenodo.22051091",
      "url": "https://zenodo.org/records/22051091/files/CIall_raw.csv.gz?download=1",
      "sha256": "9a1cc20d24c1987564ea9ae59ac17d219b47232823ad472130c692b403eb6b7d"},
-    {"file": "mission_viejo_export.csv",
-     "label": "Mission Viejo Animal Services, dogs and cats (MV_raw.csv.gz, 2016 to 2025)",
-     "doi": "10.5281/zenodo.22051091",
-     "url": "https://zenodo.org/records/22051091/files/MV_raw.csv.gz?download=1",
-     "sha256": "bd448e8789ef82acd96354997d2a796f935f0ef960c7b623975bf29fadf8a880"},
 ]

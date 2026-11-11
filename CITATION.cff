@@ -139,6 +139,6 @@ references:
     year: 2026
     license: CC-BY-4.0
     notes: >-
-      The source of the demo exports CIall_raw.csv.gz and MV_raw.csv.gz.  A run
-      over your own shelter's data has nothing to do with this deposit and
-      should not cite it.
+      The source of the demo export CIall_raw.csv.gz.  A run over your own
+      shelter's data has nothing to do with this deposit and should not cite
+      it.
