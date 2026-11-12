@@ -39,6 +39,12 @@ input[type=checkbox] { width:16px; height:16px; vertical-align:-2px; }
 button { font:inherit; font-weight:600; padding:9px 18px; border-radius:6px; border:2px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; align-self:flex-start; }
 button.secondary { background:#fff; color:var(--accent); }
 button:disabled { opacity:.5; cursor:default; }
+/* A button whose work is under way: full color, a turning ring, and a label
+   saying what is being done. */
+button.busy, button.busy:disabled { opacity:1; cursor:progress; display:inline-flex; align-items:center; gap:10px; }
+button.busy::before { content:""; flex:none; width:1em; height:1em; border:3px solid currentColor; border-right-color:transparent; border-radius:50%; animation: spin .8s linear infinite; }
+button.secondary.busy { background:#e3f1ec; }
+@keyframes spin { to { transform: rotate(360deg); } }
 button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
 .status { font-size:15px; color:var(--muted); }
 .status.ok { color:var(--ok); } .status.bad { color:var(--bad); font-weight:600; } .status.warn { color:var(--warn); }
@@ -104,7 +110,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
 .stay.left strong { color:#fff; }
 .stay.left .icon { background:#fff; color:#b3261e; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(179,38,30,.18); } }
-@media (prefers-reduced-motion: reduce) { .stay.running { animation:none; } }
+@media (prefers-reduced-motion: reduce) { .stay.running { animation:none; } button.busy::before { animation-duration:2.4s; } }
 @media (max-width: 560px) { .stay { font-size:16px; } .stay strong { font-size:18px; } .stay .icon { width:36px; height:36px; font-size:22px; } }
 </style>
 </head>
@@ -310,6 +316,21 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
 import { WebR } from './webr/webr.mjs';
 
 const $ = (id) => document.getElementById(id);
+// A pressed button shows that its work is under way until the work ends: it
+// turns into a ring and a label such as "Preparing the data...", and takes no
+// second press. The browser draws that before the work starts, since the
+// Python steps hold the page until they finish.
+const paint = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+async function startBusy(btn, label) {
+  if (btn.dataset.idle == null) btn.dataset.idle = btn.innerHTML;
+  btn.textContent = label; btn.disabled = true;
+  btn.classList.add('busy'); btn.setAttribute('aria-busy', 'true');
+  await paint();
+}
+function endBusy(btn) {
+  if (btn.dataset.idle != null) { btn.innerHTML = btn.dataset.idle; delete btn.dataset.idle; }
+  btn.classList.remove('busy'); btn.removeAttribute('aria-busy'); btn.disabled = false;
+}
 const root = new URL('./', location.href).href;
 window.demo = { timings: {}, errors: [] };
 const mark = (k, t0) => { window.demo.timings[k] = Math.round(performance.now() - t0) / 1000; };
@@ -440,10 +461,18 @@ $('demo-sel').onchange = showDoi;
 $('demo-sel').disabled = $('load-demo').disabled = false;
 showDoi();
 $('load-demo').onclick = async () => {
-  const d = manifest.demos[+$('demo-sel').value], r = await fetch('data/' + d.file);
-  if (/\.xls[xm]$/i.test(d.file)) return loadWorkbook(new File([await r.blob()], d.file));
-  loadText(d.file, await r.text());
+  const d = manifest.demos[+$('demo-sel').value];
+  await startBusy($('load-demo'), 'Loading the demo export...');
+  try {
+    const r = await fetch('data/' + d.file);
+    if (/\.xls[xm]$/i.test(d.file)) await loadWorkbook(new File([await r.blob()], d.file));
+    else { await readingNote(d.file); loadText(d.file, await r.text()); }
+  } catch (e) {
+    $('s1-status').className = 'status bad'; $('s1-status').textContent = `Could not load ${d.file}: ${e.message || e}`;
+  } finally { endBusy($('load-demo')); }
 };
+// A CSV file is read at once; a large one takes a moment, so the status says so first.
+async function readingNote(name) { $('s1-status').className = 'status'; $('s1-status').textContent = `Reading ${name}...`; await paint(); }
 $('file-input').onchange = async (e) => {
   const f = e.target.files[0];
   if (!f) return;
@@ -455,6 +484,7 @@ $('file-input').onchange = async (e) => {
     return;
   }
   // A .gz export, as the Zenodo deposits hold them, is read uncompressed.
+  await readingNote(f.name);
   const text = lower.endsWith('.gz') ? await new Response(f.stream().pipeThrough(new DecompressionStream('gzip'))).text() : await f.text();
   loadText(f.name, text);
 };
@@ -489,6 +519,7 @@ function guessSheet(sheets) {
 async function loadWorkbook(f) {
   const st = $('s1-status');
   st.className = 'status'; st.textContent = `Reading ${f.name}...`;
+  await paint();
   try {
     const py = await loadExcelReader();
     const data = new Uint8Array(await f.arrayBuffer());
@@ -1339,10 +1370,12 @@ $('prep-btn').onclick = async () => {
   const st = $('s5-status');
   if (!ownConfig && animalsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose the species in step 3 first.'; return; }
   if (windowNote().length) { st.className = 'status bad'; st.textContent = 'Fix the study window first' + (ownConfig ? ', in the configuration file.' : ', in step 5.'); return; }
-  $('prep-btn').disabled = true; $('prep-results').replaceChildren(); $('s6').classList.add('locked');
+  $('prep-results').replaceChildren(); $('s6').classList.add('locked');
+  await startBusy($('prep-btn'), 'Preparing the data...');
   st.className = 'status'; st.textContent = 'Waiting for Python...';
   const py = await pyReady;
   st.textContent = 'Preparing...';
+  await paint();
   const t0 = performance.now();
   try {
     writeExport(py);
@@ -1383,7 +1416,7 @@ buf.getvalue()`);
     st.textContent = 'ShelterDataPrep stopped: ' + (msg.find(l => /Error:/.test(l)) || msg[msg.length - 1]);
     window.demo.errors.push(String(e));
   }
-  $('prep-btn').disabled = false;
+  endBusy($('prep-btn'));
 };
 
 function countBy(csvRows, col) {
@@ -1859,7 +1892,7 @@ $('run-btn').onclick = async () => {
   if (!ownSettings && groupCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the animal groups first.'; return; }
   if (!ownSettings && periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
   if (horizonCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the analysis horizon first.'; return; }
-  $('run-btn').disabled = true;
+  await startBusy($('run-btn'), 'Running mLOS...');
   setRunning(true);
   st.className = 'status'; st.textContent = 'Waiting for R...';
   await rReady;
@@ -1891,7 +1924,7 @@ $('run-btn').onclick = async () => {
       })`)).toArray();
     } catch (e) {
       st.className = 'status bad'; st.textContent = 'mLOS stopped: ' + rError(e);
-      window.demo.errors.push(String(e)); $('run-btn').disabled = false; setRunning(false);
+      window.demo.errors.push(String(e)); endBusy($('run-btn')); setRunning(false);
       return;
     } finally { sh.purge(); }
     const over = [[n[0], PERIOD_CAP, 'periods'], [n[1], INTAKE_CAP, 'intake groups'], [n[2], GROUP_CAP, 'animal groups']].filter(([k, cap]) => k > cap);
@@ -1899,7 +1932,7 @@ $('run-btn').onclick = async () => {
       st.className = 'status bad';
       st.textContent = `This tool compares at most ${PERIOD_CAP} periods, ${INTAKE_CAP} intake groups, and ${GROUP_CAP} animal groups, and ${ownSettings.name} gives ` +
         over.map(([k, , what]) => `${k} ${what}`).join(' and ') + '. Merge some of them in the file, with its maps or its period dates.';
-      window.demo.capRefusal = st.textContent; $('run-btn').disabled = false; setRunning(false);
+      window.demo.capRefusal = st.textContent; endBusy($('run-btn')); setRunning(false);
       return;
     }
     st.textContent = 'Running mLOS...';
@@ -1924,7 +1957,7 @@ $('run-btn').onclick = async () => {
     window.demo.errors.push(String(e));
     setRunning(false);
   }
-  $('run-btn').disabled = false;
+  endBusy($('run-btn'));
 };
 
 // ---------- step 8: what to check in the results ----------
@@ -2133,7 +2166,7 @@ const README_TXT = (set) => [
 ].join('\n') + '\n';
 $('save-btn').onclick = async () => {
   const st = $('save-status'), set = saveSet();
-  $('save-btn').disabled = true;
+  await startBusy($('save-btn'), 'Putting the zip together...');
   st.className = 'status'; st.textContent = 'Putting the files together...';
   try {
     const py = await pyReady;
@@ -2174,7 +2207,7 @@ shutil.rmtree(save_root)
     st.className = 'status bad'; st.textContent = 'Could not put the files together: ' + (e.message || e);
     window.demo.errors.push(String(e));
   }
-  $('save-btn').disabled = false;
+  endBusy($('save-btn'));
 };
 
 // ---------- step 11: email to the mLOS team ----------
@@ -2358,13 +2391,14 @@ json.dumps({'built': built, 'error': error, 'seconds': seconds,
 
 $('deck-btn').onclick = async () => {
   const st = $('s7-status');
-  $('deck-btn').disabled = true;
+  await startBusy($('deck-btn'), $('tables-only').checked ? 'Building the tables...' : 'Building the deck...');
   $('deck-results').replaceChildren();
   st.className = 'status';
   st.textContent = deckLoaded ? 'Building...' : 'Loading the deck builder (the first time takes a little longer)...';
   try {
     const py = await loadDeckBuilder();
     st.textContent = 'Building...';
+    await paint();
     py.FS.mkdirTree('/results');
     for (const f of py.FS.readdir('/results')) if (f !== '.' && f !== '..') py.FS.unlink('/results/' + f);
     for (const n of lastRun.names) py.FS.writeFile('/results/' + n, await webR.FS.readFile(lastRun.out + '/' + n));
@@ -2388,7 +2422,7 @@ $('deck-btn').onclick = async () => {
     deckState = 'failed';
     if (shareRes) renderShare();
   }
-  $('deck-btn').disabled = false;
+  endBusy($('deck-btn'));
 };
 
 function showDeck(py, result) {
