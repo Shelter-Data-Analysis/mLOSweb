@@ -637,6 +637,16 @@ function forgetPrepared(why) {
   prepFiles = null; dropGroup('prep'); saveRefresh();
   $('s5-status').className = 'status warn'; $('s5-status').textContent = why + ' Prepare the data again.';
 }
+// Data prepared from the questions of steps 2 to 6 holds until an answer
+// changes the configuration they write: then it is set aside, as for a new
+// export, so a run never uses data prepared from earlier answers. This runs
+// after each control's own handler, which redraws the configuration. An
+// uploaded configuration is not edited on the page; loading or dropping one
+// sets the data aside itself.
+for (const type of ['input', 'change']) document.addEventListener(type, (e) => {
+  if (!prepared || ownConfig || !e.target.closest || !e.target.closest('#s2, #s2b, #s3, #s3b, #s4')) return;
+  if (configYaml() !== preparedConfig) forgetPrepared('An answer in steps 2 to 6 changed.');
+});
 function applyFiles(rebuildDates = false) {
   if (!shareRes) renderShare();
   if (header.length) for (const id of ['s2', 's2b', 's3', 's3b', 's4']) $(id).classList.toggle('locked', !!ownConfig);
@@ -1986,7 +1996,9 @@ $('run-btn').onclick = async () => {
     lastRunCap = capValue();
     lastRunLead = exportFacts() && windowLead(exportFacts());
     const wasLeft = leftDuringRun;
-    setRunning(false, 'done');
+    // An answer changed during the run sets the prepared data aside; the
+    // results are then out of date as soon as they appear.
+    setRunning(false, prepared ? 'done' : 'stale');
     if (wasLeft) st.textContent += ' The tab was out of sight for part of the run, which can make it take longer.';
     runFacts = facts;
     await showRun(out, group);
