@@ -1488,7 +1488,17 @@ function fileLink(name, data, type, text) {
 const made = new Set(), got = new Set();
 function madeGroup(g) { made.add(g); got.delete(g); }
 function dropGroup(g) { made.delete(g); got.delete(g); }
+// Opening an email goes to a mailto: address, which the browser treats as
+// leaving the page although the page stays; the email in step 11 sets this
+// flag for a moment so that it raises no warning.
+let openingEmail = false;
+function openEmail(url) {
+  openingEmail = true;
+  setTimeout(() => { openingEmail = false; }, 1000);
+  if (url) location.href = url;
+}
 window.addEventListener('beforeunload', (e) => {
+  if (openingEmail) return;
   if ([...made].some(g => !got.has(g))) { e.preventDefault(); e.returnValue = ''; }
 });
 const DL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>';
@@ -2286,7 +2296,7 @@ shutil.rmtree(save_root)
 // email opens. Splitting the address stops only the crudest harvesters.
 const SHARE_TO = ['mLOSweb', 'outlook.com'].join('@');
 let shareText = '';
-$('share-fallback').append('If no email opens, copy the summary and send it to ', Object.assign(document.createElement('a'), { href: 'mailto:' + SHARE_TO, textContent: SHARE_TO }), '.');
+$('share-fallback').append('If no email opens, copy the summary and send it to ', Object.assign(document.createElement('a'), { href: 'mailto:' + SHARE_TO, textContent: SHARE_TO, onclick: () => openEmail() }), '.');
 
 // The summary is one "key: value" per line, so a program can read the emails
 // back, with lines the user deletes simply missing. Keys are fixed; numbers are
@@ -2452,7 +2462,7 @@ $('share-comments').oninput = renderShare;
 // The short summary changes as an export or a file is loaded, so it is
 // written afresh whenever step 11 is used before a run.
 $('s8').addEventListener('focusin', () => { if (!shareRes) renderShare(); });
-$('share-btn').onclick = () => { renderShare(); location.href = shareUrl(); };
+$('share-btn').onclick = () => { renderShare(); openEmail(shareUrl()); };
 $('share-copy').onclick = async () => {
   renderShare();
   try { await navigator.clipboard.writeText(shareText); $('share-copy').textContent = 'Copied'; }
