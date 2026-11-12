@@ -728,6 +728,11 @@ function restoreSettings(a) {
   if (prepared) { buildOutcomes(); buildIntakes(); buildGroupBy(); buildReferences(); }
 }
 
+// The sheet for ShelterDataPrep: a CSV export has none. Pyodide passes a
+// JavaScript null to Python as jsnull, which ShelterDataPrep takes for a
+// sheet name, and undefined as None.
+const pySheet = () => exportSource.sheet == null ? undefined : exportSource.sheet;
+
 // An uploaded configuration's dates are read by ShelterDataPrep itself, with
 // the file's own columns and date format, so the window checks see what the
 // preparation will.
@@ -738,7 +743,7 @@ async function configFacts() {
   const py = await pyReady;
   writeExport(py);
   py.globals.set('export_file', exportSource.file);
-  py.globals.set('export_sheet', exportSource.sheet);
+  py.globals.set('export_sheet', pySheet());
   try {
     const facts = JSON.parse(py.runPython(`
 import json
@@ -1392,7 +1397,7 @@ $('prep-btn').onclick = async () => {
   try {
     writeExport(py);
     py.globals.set('export_file', exportSource.file);
-    py.globals.set('export_sheet', exportSource.sheet);
+    py.globals.set('export_sheet', pySheet());
     preparedConfig = ownConfig ? ownConfig.text : configYaml();
     py.FS.writeFile('/work/config.yaml', preparedConfig);
     // An uploaded configuration reads the export loaded in step 1 and writes
