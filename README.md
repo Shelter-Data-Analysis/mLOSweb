@@ -22,7 +22,7 @@ An export is often cut by date: by intake date, holding the animals admitted in 
 | `CITATION.cff` | Citation metadata, for GitHub's "Cite this repository" button |
 | `.zenodo.json` | The same metadata in the form Zenodo reads when it archives a release, with the related works it lists |
 | `check_citation.py` | Checks that `CITATION.cff`, `.zenodo.json`, and `pins.py` agree, that `.zenodo.json` uses only names Zenodo reads, and, in a tag build, that the tag names the same version |
-| `.github/workflows/citation.yml` | Runs `check_citation.py` on every push, pull request, and tag, apart from publishing |
+| `.github/workflows/citation.yml` | Runs `check_citation.py` on every push to `main`, every pull request, and every tag, apart from publishing |
 
 No program's code, webR, the packages, nor the demo data is stored in this repository; each build downloads them at the versions in `pins.py`. Downloads are kept in `.cache/`, so a second build is fast.
 

@@ -1,5 +1,5 @@
-# Check that CITATION.cff, .zenodo.json, and pins.py agree, on every push and
-# pull request, and on every tag, where it also checks that the tag names the
+# Check that CITATION.cff, .zenodo.json, and pins.py agree, on every push to
+# main, every pull request, and every tag, where it also checks that the tag names the
 # same version.  It runs apart from the publishing workflow, so a disagreement
 # never stops the site from being published.
 name: Check the citation metadata
