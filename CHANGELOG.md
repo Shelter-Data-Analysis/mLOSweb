@@ -2,6 +2,14 @@
 
 Each release lists what changed for a visitor to the page, and whether any change can move a number in a result.
 
+## Unreleased
+
+**Numbers.** No numbers move.
+
+**Fixes.**
+
+- "Write the email" in step 11 no longer raises the warning about leaving the page with files not downloaded. Opening an email leaves the page where it is.
+
 ## 0.2.0 (2026-11-12)
 
 **Numbers.** One change can move a number. In 0.1.0, a run made after changing an answer in steps 2 to 6 (the columns, the date format, the species, the records left out, or the age groups) analyzed the data prepared from the earlier answers. The page now asks to prepare the data again, so such a run uses the answers shown on the page. A run with unchanged answers gives the same results as in 0.1.0. mLOS moves from 0.5.0 to 0.5.1, which adds the plot titles and changes no number: on the Irvine workbook run of 2026-11-11, every number in `results.json` agreed with the 0.5.0 run.
