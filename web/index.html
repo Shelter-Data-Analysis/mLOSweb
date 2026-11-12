@@ -295,10 +295,11 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <p class="status" id="save-status"></p>
   </section>
 
-  <section id="s8" class="locked">
+  <section id="s8">
     <span class="step">Step 11 (optional)</span>
-    <h2>Share some basic stats on your study</h2>
+    <h2>Send us your comments and some basic stats on your study</h2>
     <p class="help">Help us improve the software by sharing some basic stats on your study. We do not track your data or your usage: this page sends nothing itself. The button opens a new email in your email program, addressed to us, holding the summary below: how the page was used and how your study was set up (counts, dates, choices, and group labels). It holds no results, no record of any animal, and no file. Delete any line you prefer not to share, and send it only if you wish. We may write back to ask whether you would share the data.</p>
+    <p class="help"><strong>Comments are welcome at any point, even if you stopped partway or could not get the page to work.</strong> Until mLOS has run, the email holds only your comments, the versions of this page and the programs, the date, and how the export was loaded.</p>
     <div class="plea">
       <label for="share-comments"><strong>Please tell us what you think.</strong> Your comments are the most useful part of this email, and the main way we learn what to fix and what to add. What worked? What was confusing, slow, or wrong? What did you wish the page did? A single sentence helps; a few minutes of candid comments helps a great deal. They go on the <code>comments:</code> line at the end of the email, and you can also add to them in the email itself.</label>
       <textarea id="share-comments" rows="5" placeholder="Comments: what worked, what did not, and what would make this tool more useful to your shelter"></textarea>
@@ -614,6 +615,7 @@ function forgetPrepared(why) {
   $('s5-status').className = 'status warn'; $('s5-status').textContent = why + ' Prepare the data again.';
 }
 function applyFiles(rebuildDates = false) {
+  if (!shareRes) renderShare();
   if (header.length) for (const id of ['s2', 's2b', 's3', 's3b', 's4']) $(id).classList.toggle('locked', !!ownConfig);
   $('cfg-drop').hidden = !ownConfig;
   $('set-drop').hidden = !ownSettings;
@@ -2233,11 +2235,43 @@ async function shareSummary(out, seconds) {
   deckState = 'not built';
   renderShare();
 }
+// Before any run, the email holds the visitor's comments with the versions,
+// the date, and, once an export is loaded, how it was loaded: the keys of the
+// full summary that need no results. Its subject says it holds comments.
+function shareLead() {
+  const demo = manifest.demos.find(d => d.file === exportName);
+  return [
+    'summary_format: 2',
+    `site_commit: ${manifest.site_commit || 'unknown'}`,
+    `mlos_version: ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)})`,
+    `shelterprep_version: ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)})`,
+    `run_date: ${todayIso()}`,
+    ...(!exportSource ? [] : [
+      `export_source: ${demo ? 'demo ' + demo.file : 'own file'}`,
+      `export_type: ${exportSource.sheet != null ? 'workbook' : 'csv'}`,
+      `configuration_from: ${ownConfig ? 'uploaded file' : 'page questions'}`,
+      `settings_from: ${ownSettings ? 'uploaded file' : 'page questions'}`,
+    ]),
+  ];
+}
+const shareComments = () => [
+  '# Comments: please write them after "comments:", here or in the email. They help us improve the tool.',
+  ...('comments: ' + $('share-comments').value.trim()).split(/\r?\n/),
+  '',
+];
 function renderShare() {
+  if (!shareRes) return showShare([
+    'mLOS Web comments, sent before any analysis was run: no results and no record of any animal.',
+    'Delete any line you prefer not to share.',
+    '',
+    '# Run',
+    ...shareLead(),
+    '',
+    ...shareComments(),
+  ]);
   const res = shareRes, dp = res.data_preparation, st = res.settings, all = res.strata.all;
   const r1 = (x) => x == null || !isFinite(x) ? 'NA' : x.toFixed(1);
   const cell = (m, row, col = 0) => { const i = m && m.rows ? m.rows.indexOf(row) : -1; return i < 0 ? null : m.values[i][col]; };
-  const demo = manifest.demos.find(d => d.file === exportName);
   const facts = exportFacts(), guess = facts && cutGuess(facts);
   const cutText = !guess ? 'unknown' : guess.start === 'outcome' && guess.end === 'outcome' ? 'outcome date'
     : guess.end === 'outcome' ? 'intake and outcome date' : guess.start === 'outcome' ? 'outcome date at start' : 'intake date or none';
@@ -2248,15 +2282,7 @@ function renderShare() {
     'Delete any line you prefer not to share.',
     '',
     '# Run',
-    'summary_format: 2',
-    `site_commit: ${manifest.site_commit || 'unknown'}`,
-    `mlos_version: ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)})`,
-    `shelterprep_version: ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)})`,
-    `run_date: ${todayIso()}`,
-    `export_source: ${demo ? 'demo ' + demo.file : 'own file'}`,
-    `export_type: ${exportSource && exportSource.sheet != null ? 'workbook' : 'csv'}`,
-    `configuration_from: ${ownConfig ? 'uploaded file' : 'page questions'}`,
-    `settings_from: ${ownSettings ? 'uploaded file' : 'page questions'}`,
+    ...shareLead(),
     `analysis_seconds: ${r1(shareRun.seconds)}`,
     `deck: ${deckState}`,
     '',
@@ -2284,10 +2310,11 @@ function renderShare() {
     `outcomes: ${cell(all.outcomes, 'completed_outcomes_total')}`,
     `overlapping_stays_dropped: ${(() => { const l = dp.ledger.columns, j = l.name.indexOf('overlapping_stays'); return j < 0 ? 0 : l.rows_affected[j]; })()}`,
     '',
-    '# Comments: please write them after "comments:", here or in the email. They help us improve the tool.',
-    ...('comments: ' + $('share-comments').value.trim()).split(/\r?\n/),
-    '',
+    ...shareComments(),
   ];
+  showShare(lines);
+}
+function showShare(lines) {
   shareText = lines.join('\r\n');
   $('share-preview').textContent = lines.join('\n');
   $('share-copy').textContent = 'Copy the summary';
@@ -2296,15 +2323,20 @@ function renderShare() {
   window.demo.shareLength = len;
 }
 function shareUrl() {
-  return `mailto:${SHARE_TO}?subject=${encodeURIComponent('mLOS Web run summary')}&body=${encodeURIComponent(shareText)}`;
+  return `mailto:${SHARE_TO}?subject=${encodeURIComponent(shareRes ? 'mLOS Web run summary' : 'mLOS Web comments')}&body=${encodeURIComponent(shareText)}`;
 }
 window.demo.shareUrl = shareUrl;
-$('share-comments').oninput = () => { if (shareRes) renderShare(); };
-$('share-btn').onclick = () => { location.href = shareUrl(); };
+$('share-comments').oninput = renderShare;
+// The short summary changes as an export or a file is loaded, so it is
+// written afresh whenever step 11 is used before a run.
+$('s8').addEventListener('focusin', () => { if (!shareRes) renderShare(); });
+$('share-btn').onclick = () => { renderShare(); location.href = shareUrl(); };
 $('share-copy').onclick = async () => {
+  renderShare();
   try { await navigator.clipboard.writeText(shareText); $('share-copy').textContent = 'Copied'; }
   catch (e) { $('share-copy').textContent = 'Copy failed: select the text above'; }
 };
+renderShare();
 
 // ---------- step 9: deck builder ----------
 // mlos_review runs in the same Python as ShelterDataPrep. Its extra packages
