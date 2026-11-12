@@ -62,6 +62,10 @@ details summary { cursor:pointer; color:var(--accent); font-size:15px; font-weig
 .flag { font-size:12px; color:var(--accent); font-weight:700; margin-left:3px; }
 .file-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .file-row button { padding:4px 12px; font-size:14px; }
+.plea { display:flex; flex-direction:column; gap:8px; padding:12px 14px; border:2px solid var(--accent); border-left-width:6px; border-radius:8px; background:#e3f1ec; max-width:80ch; }
+.plea label { font-size:16px; }
+.plea strong { color:#1d4d40; font-size:18px; display:block; }
+.plea textarea { font:inherit; width:100%; padding:8px 10px; border:1px solid #9aa39f; border-radius:4px; background:#fff; color:var(--fg); resize:vertical; }
 .tnote { font-size:13px; color:var(--muted); font-style:italic; margin:4px 0 0; max-width:80ch; }
 /* A download line: where a step's files appear, each file a pill showing its
    type and size, ticked once it has been downloaded. */
@@ -289,6 +293,10 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <span class="step">Step 11 (optional)</span>
     <h2>Share some basic stats on your study</h2>
     <p class="help">Help us improve the software by sharing some basic stats on your study. We do not track your data or your usage: this page sends nothing itself. The button opens a new email in your email program, addressed to us, holding the summary below: how the page was used and how your study was set up (counts, dates, choices, and group labels). It holds no results, no record of any animal, and no file. Delete any line you prefer not to share, and send it only if you wish. We may write back to ask whether you would share the data.</p>
+    <div class="plea">
+      <label for="share-comments"><strong>Please tell us what you think.</strong> Your comments are the most useful part of this email, and the main way we learn what to fix and what to add. What worked? What was confusing, slow, or wrong? What did you wish the page did? A single sentence helps; a few minutes of candid comments helps a great deal. They go on the <code>comments:</code> line at the end of the email, and you can also add to them in the email itself.</label>
+      <textarea id="share-comments" rows="5" placeholder="Comments: what worked, what did not, and what would make this tool more useful to your shelter"></textarea>
+    </div>
     <pre id="share-preview"></pre>
     <div class="file-row"><button id="share-btn" class="secondary">Write the email</button><button id="share-copy" class="secondary">Copy the summary</button></div>
     <p class="help" id="share-fallback"></p>
@@ -2181,7 +2189,9 @@ $('share-fallback').append('If no email opens, copy the summary and send it to '
 // The summary is one "key: value" per line, so a program can read the emails
 // back, with lines the user deletes simply missing. Keys are fixed; numbers are
 // plain (no thousands separators), and dates are ISO. A list of labels is
-// separated by " | ", since labels may hold spaces and commas. summary_format
+// separated by " | ", since labels may hold spaces and commas. The visitor's
+// comments come last, under "# Comments", and every line after "comments:"
+// belongs to them, so they may run over several lines. summary_format
 // numbers this layout; change it with any change of a key or its meaning.
 let shareRes = null, shareRun = null, deckState = 'not built';
 async function shareSummary(out, seconds) {
@@ -2205,7 +2215,7 @@ function renderShare() {
     'Delete any line you prefer not to share.',
     '',
     '# Run',
-    'summary_format: 1',
+    'summary_format: 2',
     `site_commit: ${manifest.site_commit || 'unknown'}`,
     `mlos_version: ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)})`,
     `shelterprep_version: ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)})`,
@@ -2241,6 +2251,9 @@ function renderShare() {
     `outcomes: ${cell(all.outcomes, 'completed_outcomes_total')}`,
     `overlapping_stays_dropped: ${(() => { const l = dp.ledger.columns, j = l.name.indexOf('overlapping_stays'); return j < 0 ? 0 : l.rows_affected[j]; })()}`,
     '',
+    '# Comments: please write them after "comments:", here or in the email. They help us improve the tool.',
+    ...('comments: ' + $('share-comments').value.trim()).split(/\r?\n/),
+    '',
   ];
   shareText = lines.join('\r\n');
   $('share-preview').textContent = lines.join('\n');
@@ -2253,6 +2266,7 @@ function shareUrl() {
   return `mailto:${SHARE_TO}?subject=${encodeURIComponent('mLOS Web run summary')}&body=${encodeURIComponent(shareText)}`;
 }
 window.demo.shareUrl = shareUrl;
+$('share-comments').oninput = () => { if (shareRes) renderShare(); };
 $('share-btn').onclick = () => { location.href = shareUrl(); };
 $('share-copy').onclick = async () => {
   try { await navigator.clipboard.writeText(shareText); $('share-copy').textContent = 'Copied'; }
