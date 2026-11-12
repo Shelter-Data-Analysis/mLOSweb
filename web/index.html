@@ -320,8 +320,14 @@ const $ = (id) => document.getElementById(id);
 // A pressed button shows that its work is under way until the work ends: it
 // turns into a ring and a label such as "Preparing the data...", and takes no
 // second press. The browser draws that before the work starts, since the
-// Python steps hold the page until they finish.
-const paint = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+// Python steps hold the page until they finish. A browser does not draw a
+// tab that is out of sight, and holds requestAnimationFrame until the tab is
+// shown again, so a timer starts the work there instead, after 100 ms.
+const paint = () => new Promise(r => {
+  let go = () => { go = null; setTimeout(r, 0); };
+  requestAnimationFrame(() => go && go());
+  setTimeout(() => go && go(), 100);
+});
 async function startBusy(btn, label) {
   if (btn.dataset.idle == null) btn.dataset.idle = btn.innerHTML;
   btn.textContent = label; btn.disabled = true;
