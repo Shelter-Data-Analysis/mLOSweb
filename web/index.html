@@ -299,7 +299,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <span class="step">Step 11 (optional)</span>
     <h2>Send us your comments and some basic stats on your study</h2>
     <p class="help">Help us improve the software by sharing some basic stats on your study. We do not track your data or your usage: this page sends nothing itself. The button opens a new email in your email program, addressed to us, holding the summary below: how the page was used and how your study was set up (counts, dates, choices, and group labels). It holds no results, no record of any animal, and no file. Delete any line you prefer not to share, and send it only if you wish. We may write back to ask whether you would share the data.</p>
-    <p class="help"><strong>Comments are welcome at any point, even if you stopped partway or could not get the page to work.</strong> Until mLOS has run, the email holds only your comments, the versions of this page and the programs, the date, and how the export was loaded.</p>
+    <p class="help"><strong>Comments are welcome at any point, even if you stopped partway or could not get the page to work.</strong> Until mLOS has run, the email holds your comments and what the page knows so far: the versions of this page and the programs, the date, and how far you got; once an export is loaded, how it was loaded, the species, and the export's numbers of rows and columns; and once the data is prepared, the number of prepared rows.</p>
     <div class="plea">
       <label for="share-comments"><strong>Please tell us what you think.</strong> Your comments are the most useful part of this email, and the main way we learn what to fix and what to add. What worked? What was confusing, slow, or wrong? What did you wish the page did? A single sentence helps; a few minutes of candid comments helps a great deal. They go on the <code>comments:</code> line at the end of the email, and you can also add to them in the email itself.</label>
       <textarea id="share-comments" rows="5" placeholder="Comments: what worked, what did not, and what would make this tool more useful to your shelter"></textarea>
@@ -423,6 +423,7 @@ function loadText(name, text) {
 // names, so it never reads one either. pandas names such a column "Unnamed: 3".
 const blankName = (h) => !h || /^Unnamed: \d+$/.test(h);
 function loadTable(name, source, head, body) {
+  prepStopped = runStopped = false;
   forgetPrepared('A different export was loaded.');
   const keep = head.map((h, i) => i).filter(i => !blankName(head[i]) || body.some(r => (r[i] || '').trim()));
   const dropped = head.length - keep.length;
@@ -1411,7 +1412,8 @@ with contextlib.redirect_stdout(buf):
 buf.getvalue()`);
     mark('prepare', t0);
     prepared = py.FS.readFile('/work/out/prepared.csv', { encoding: 'utf8' });
-    preparedFacts = facts;
+    preparedFacts = { ...facts, prepared_rows: parseCSV(prepared).slice(1).filter(r => r.length > 1).length };
+    prepStopped = runStopped = false;
     const statsText = py.FS.readFile('/work/out/prepared_stats.csv', { encoding: 'utf8' });
     showPrep(parseCSV(statsText), prepared, statsText);
     st.className = 'status ok';
@@ -1427,8 +1429,10 @@ buf.getvalue()`);
     st.className = 'status bad';
     st.textContent = 'ShelterDataPrep stopped: ' + (msg.find(l => /Error:/.test(l)) || msg[msg.length - 1]);
     window.demo.errors.push(String(e));
+    prepStopped = true;
   }
   endBusy($('prep-btn'));
+  if (!shareRes) renderShare();
 };
 
 function countBy(csvRows, col) {
@@ -1937,7 +1941,7 @@ $('run-btn').onclick = async () => {
       })`)).toArray();
     } catch (e) {
       st.className = 'status bad'; st.textContent = 'mLOS stopped: ' + rError(e);
-      window.demo.errors.push(String(e)); endBusy($('run-btn')); setRunning(false);
+      window.demo.errors.push(String(e)); endBusy($('run-btn')); setRunning(false); runStoppedShare();
       return;
     } finally { sh.purge(); }
     const over = [[n[0], PERIOD_CAP, 'periods'], [n[1], INTAKE_CAP, 'intake groups'], [n[2], GROUP_CAP, 'animal groups']].filter(([k, cap]) => k > cap);
@@ -1945,7 +1949,7 @@ $('run-btn').onclick = async () => {
       st.className = 'status bad';
       st.textContent = `This tool compares at most ${PERIOD_CAP} periods, ${INTAKE_CAP} intake groups, and ${GROUP_CAP} animal groups, and ${ownSettings.name} gives ` +
         over.map(([k, , what]) => `${k} ${what}`).join(' and ') + '. Merge some of them in the file, with its maps or its period dates.';
-      window.demo.capRefusal = st.textContent; endBusy($('run-btn')); setRunning(false);
+      window.demo.capRefusal = st.textContent; endBusy($('run-btn')); setRunning(false); runStoppedShare();
       return;
     }
     st.textContent = 'Running mLOS...';
@@ -1968,10 +1972,12 @@ $('run-btn').onclick = async () => {
   } catch (e) {
     st.className = 'status bad';
     st.textContent = 'mLOS stopped: ' + (e.message || e);
+    runStopped = true;
     window.demo.errors.push(String(e));
     setRunning(false);
   }
   endBusy($('run-btn'));
+  if (!shareRes) renderShare();
 };
 
 // ---------- step 8: what to check in the results ----------
@@ -2240,6 +2246,7 @@ $('share-fallback').append('If no email opens, copy the summary and send it to '
 // comments come last, under "# Comments", and every line after "comments:"
 // belongs to them, so they may run over several lines. summary_format
 // numbers this layout; change it with any change of a key or its meaning.
+// Format 3 added the summary sent before a run, with stage and prepared_rows.
 let shareRes = null, shareRun = null, deckState = 'not built';
 async function shareSummary(out, seconds, facts) {
   shareRes = JSON.parse(new TextDecoder().decode(await webR.FS.readFile(out + '/results.json')));
@@ -2247,12 +2254,14 @@ async function shareSummary(out, seconds, facts) {
   deckState = 'not built';
   renderShare();
 }
-// Before any run, the email holds the visitor's comments with the versions,
-// the date, and, once an export is loaded, how it was loaded: the keys of the
-// full summary that need no results. Its subject says it holds comments.
+// Before any run, the email holds the visitor's comments with what the page
+// knows so far: the versions and the date; how far the visitor got (stage);
+// once an export is loaded, how it was loaded and the full summary's lines on
+// the export; and once the data is prepared, the number of prepared rows.
+// Its subject says it holds comments.
 function shareLead(f = loadFacts()) {
   return [
-    'summary_format: 2',
+    'summary_format: 3',
     `site_commit: ${manifest.site_commit || 'unknown'}`,
     `mlos_version: ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)})`,
     `shelterprep_version: ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)})`,
@@ -2296,13 +2305,42 @@ const shareComments = () => [
   ...('comments: ' + $('share-comments').value.trim()).split(/\r?\n/),
   '',
 ];
+// How far a visitor got who has not finished a run. Data prepared and then
+// a preparation that stopped counts as stopped, as the run waits on it.
+let prepStopped = false, runStopped = false;
+const prepReady = () => !!prepared && !prepStopped;
+function shareStage() {
+  return !exportSource ? 'nothing loaded' : prepReady() ? (runStopped ? 'run stopped' : 'data prepared')
+    : prepStopped ? 'preparation stopped' : 'export loaded';
+}
+function runStoppedShare() { runStopped = true; if (!shareRes) renderShare(); }
+// The data lines before a run: those of the prepared data once there is
+// some, as a run would report them, and the page's as it stands until then.
+// settings_from is the page's as it stands, since a settings file may be
+// loaded after the data is prepared and is read when the run starts.
+function partialData() {
+  if (!exportSource) return [];
+  const f = prepReady() ? preparedFacts : prepFacts();
+  return [
+    '',
+    '# Data',
+    `species: ${f.species || 'not chosen'}`,
+    `export_rows: ${f.export_rows}`,
+    `export_columns: ${f.export_columns}`,
+    `columns_carried: ${f.columns_carried}`,
+    `cut_by_date_guess: ${f.cut_by_date_guess}`,
+    ...(prepReady() ? [`prepared_rows: ${f.prepared_rows}`] : []),
+  ];
+}
 function renderShare() {
   if (!shareRes) return showShare([
     'mLOS Web comments, sent before any analysis was run: no results and no record of any animal.',
     'Delete any line you prefer not to share.',
     '',
     '# Run',
-    ...shareLead(),
+    ...shareLead(prepReady() ? { ...preparedFacts, settings_from: loadFacts().settings_from } : loadFacts()),
+    `stage: ${shareStage()}`,
+    ...partialData(),
     '',
     ...shareComments(),
   ]);
