@@ -212,7 +212,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
   <section id="s5" class="locked">
     <span class="step">Step 7</span>
     <h2>Prepare the data</h2>
-    <p class="help">These choices become a ShelterDataPrep configuration file. The other rules (the animal size labels) are taken from the existing Mission Viejo configuration and stay fixed in this demo. Outcome and intake labels pass through unchanged and are classified in step 8.</p>
+    <p class="help">These choices become a ShelterDataPrep configuration file. Its other rules are not asked about: they are taken from ShelterDataPrep's configuration for Mission Viejo and are the same for every export, and "Show the configuration file" lists them. One of them renames size labels written the Mission Viejo way, such as LARGE, and changes nothing in an export that does not use them. Outcome and intake labels pass through unchanged and are classified in step 8.</p>
     <div id="cfg-panel" hidden><p class="status warn" id="cfg-panel-note"></p><ul class="help" id="cfg-changes"></ul><p class="status" id="cfg-window-note"></p></div>
     <details><summary>Show the configuration file</summary><pre id="config-yaml"></pre></details>
     <button id="prep-btn">Prepare the data</button>
@@ -1118,13 +1118,14 @@ function ageGroups() {
 }
 
 // ---------- step 5: configuration ----------
-// The fixed rules, from ShelterDataPrep's configs/mission_viejo.yaml. A rule
+// The fixed rules, the same for every export, from ShelterDataPrep's
+// configs/mission_viejo.yaml. A rule
 // on the size or the age group is left out when step 2 matches no size or no
 // date-of-birth column, since ShelterDataPrep refuses a step on a column the
 // export lacks.
 function fixedRules(size, age, firstAge) {
   return `
-# --- fixed for this demo, from ShelterDataPrep's configs/mission_viejo.yaml ---
+# --- fixed rules, the same for every export, from ShelterDataPrep's configs/mission_viejo.yaml ---
 unique_report: [animal_id]
 steps:
   - cut: {window_presence: [BEFORE, AFTER, _UNKNOWN_]}
