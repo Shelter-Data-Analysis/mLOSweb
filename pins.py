@@ -12,7 +12,7 @@ webR and the R packages by version.
 # release tag points to, not the tag: a tag can be moved and a hash cannot,
 # and the downloads are not checked against a digest. The mLOS commit
 # supplies both the R analysis and the deck builder, mlos_review.
-MLOS_REF = "57deba11cf364746b4ae54e040a35e8d9b3ec427"  # mLOS v0.5.0
+MLOS_REF = "174e5ea7b7aa4fc2b739b0979c54e268c22814f5"  # mLOS v0.5.1
 SDP_REF = "438a6613331617282ddf2702903562d8d17eb281"  # ShelterDataPrep v0.5.1
 
 # webR, the build of R for WebAssembly, from its npm package. Its R version
