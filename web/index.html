@@ -1488,14 +1488,15 @@ function fileLink(name, data, type, text) {
 const made = new Set(), got = new Set();
 function madeGroup(g) { made.add(g); got.delete(g); }
 function dropGroup(g) { made.delete(g); got.delete(g); }
-// Opening an email goes to a mailto: address, which the browser treats as
-// leaving the page although the page stays; the email in step 11 sets this
-// flag for a moment so that it raises no warning.
+// "Write the email" sends the page to a mailto: address, which the browser
+// treats as leaving the page although the page stays; it sets this flag for
+// a moment so that it raises no warning. The address under the button, a
+// plain mailto: link, raised no warning when tried (2026-11-12).
 let openingEmail = false;
 function openEmail(url) {
   openingEmail = true;
   setTimeout(() => { openingEmail = false; }, 1000);
-  if (url) location.href = url;
+  location.href = url;
 }
 window.addEventListener('beforeunload', (e) => {
   if (openingEmail) return;
@@ -2296,7 +2297,7 @@ shutil.rmtree(save_root)
 // email opens. Splitting the address stops only the crudest harvesters.
 const SHARE_TO = ['mLOSweb', 'outlook.com'].join('@');
 let shareText = '';
-$('share-fallback').append('If no email opens, copy the summary and send it to ', Object.assign(document.createElement('a'), { href: 'mailto:' + SHARE_TO, textContent: SHARE_TO, onclick: () => openEmail() }), '.');
+$('share-fallback').append('If no email opens, copy the summary and send it to ', Object.assign(document.createElement('a'), { href: 'mailto:' + SHARE_TO, textContent: SHARE_TO }), '.');
 
 // The summary is one "key: value" per line, so a program can read the emails
 // back, with lines the user deletes simply missing. Keys are fixed; numbers are

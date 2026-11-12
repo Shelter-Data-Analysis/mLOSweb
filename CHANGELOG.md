@@ -8,7 +8,7 @@ Each release lists what changed for a visitor to the page, and whether any chang
 
 **Fixes.**
 
-- "Write the email" in step 11, and the email address under it, no longer raise the warning about leaving the page with files not downloaded. Opening an email leaves the page where it is.
+- "Write the email" in step 11 no longer raises the warning about leaving the page with files not downloaded. Opening an email leaves the page where it is.
 
 ## 0.2.0 (2026-11-12)
 
