@@ -2024,9 +2024,17 @@ async function runChecks(out, cap, lead) {
   return box;
 }
 
-const DEFAULT_PLOTS = ['km_survival_unified.png', 'km_in_care_tenure_unified.png', 'km_remaining_los_unified.png',
-                       'km_survival_by_period.png', 'km_survival_by_animal_group.png', 'aj_cif_unified_stack.png'];
-let chosenPlots = [...DEFAULT_PLOTS];
+// The plots shown first answer the four questions at the top of the page, in
+// their order: length of stay by period; by intake type and by animal group;
+// the remaining stay and the outcome mix by days already in care; and the
+// animals in care by tenure, by animal group, or by intake type when the run
+// compares no animal groups. A default the run did not write is skipped.
+const DEFAULT_PLOTS = ['km_survival_by_period.png', 'km_survival_by_intake_type.png', 'km_survival_by_animal_group.png',
+                       'km_remaining_los_unified.png', 'aj_conditional_unified_stack.png', 'km_census_by_tenure_by_animal_group.png'];
+const defaultPlots = (images) => DEFAULT_PLOTS.map(n =>
+  n === 'km_census_by_tenure_by_animal_group.png' && !images[n] ? 'km_census_by_tenure_by_intake_type.png' : n);
+// The visitor's choice of plots, kept from run to run; null until they make one.
+let chosenPlots = null;
 
 async function showRun(out, group) {
   const sh = await new webR.Shelter();
@@ -2086,9 +2094,10 @@ async function showRun(out, group) {
   madeGroup('run');
   saveRefresh();
   const grid = document.createElement('div'); grid.className = 'plots';
+  const shown = () => chosenPlots || defaultPlots(images);
   const draw = () => {
     grid.replaceChildren();
-    for (const n of chosenPlots.filter(n => images[n])) {
+    for (const n of shown().filter(n => images[n])) {
       const fig = document.createElement('figure');
       // The file name, as the zip and a native run name it, and under it the
       // title the figure itself carries: no second name for the plot.
@@ -2114,7 +2123,7 @@ async function showRun(out, group) {
       fig.append(dl);
       grid.append(fig);
     }
-    window.demo.shown = chosenPlots.filter(n => images[n]);
+    window.demo.shown = shown().filter(n => images[n]);
   };
   const pick = document.createElement('details');
   pick.innerHTML = '<summary>Choose which plots to show</summary>';
@@ -2124,21 +2133,21 @@ async function showRun(out, group) {
     // The title under the file name, as in the captions: here it is all a
     // reader has to go on in choosing a plot not yet shown.
     const lab = document.createElement('label'); lab.className = 'plot-pick';
-    lab.innerHTML = `<input type="checkbox" id="plot-${k}" ${chosenPlots.includes(n) ? 'checked' : ''}><span><span class="plot-file"></span></span>`;
+    lab.innerHTML = `<input type="checkbox" id="plot-${k}" ${shown().includes(n) ? 'checked' : ''}><span><span class="plot-file"></span></span>`;
     lab.querySelector('.plot-file').textContent = n;
     if (titleOf[n]) {
       const t = document.createElement('span'); t.className = 'plot-title'; t.textContent = titleOf[n];
       lab.querySelector('span').append(t);
     }
     lab.querySelector('input').onchange = (e) => {
-      chosenPlots = e.target.checked ? [...chosenPlots, n] : chosenPlots.filter(x => x !== n);
+      chosenPlots = e.target.checked ? [...shown(), n] : shown().filter(x => x !== n);
       draw();
     };
     list.append(lab);
   });
-  const reset = document.createElement('button'); reset.className = 'secondary'; reset.textContent = 'Back to the default six';
+  const reset = document.createElement('button'); reset.className = 'secondary'; reset.textContent = 'Back to the default plots';
   reset.style.marginTop = '8px';
-  reset.onclick = () => { chosenPlots = [...DEFAULT_PLOTS]; list.querySelectorAll('input').forEach((i, k) => i.checked = chosenPlots.includes(pngs[k])); draw(); };
+  reset.onclick = () => { chosenPlots = null; list.querySelectorAll('input').forEach((i, k) => i.checked = shown().includes(pngs[k])); draw(); };
   pick.append(list, reset);
   draw();
   wrap.append(intro, links, await runChecks(out, lastRunCap, lastRunLead), grid, pick);
