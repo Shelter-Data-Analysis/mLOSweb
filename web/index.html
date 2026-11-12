@@ -230,7 +230,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
   <section id="s5" class="locked">
     <span class="step">Step 7</span>
     <h2>Prepare the data</h2>
-    <p class="help">These choices become a ShelterDataPrep configuration file. Its other rules are not asked about: they are taken from ShelterDataPrep's configuration for Mission Viejo and are the same for every export, and "Show the configuration file" lists them. One of them renames size labels written the Mission Viejo way, such as LARGE, and changes nothing in an export that does not use them. Outcome and intake labels pass through unchanged and are classified in step 8.</p>
+    <p class="help">These choices become a ShelterDataPrep configuration file. Its other rules are not asked about: they are taken from ShelterDataPrep's configuration for Mission Viejo and are the same for every file, and "Show the configuration file" lists them. One of them renames size labels written the Mission Viejo way, such as LARGE, and changes nothing in a file that does not use them. Outcome and intake labels pass through unchanged and are classified in step 8.</p>
     <div id="cfg-panel" hidden><p class="status warn" id="cfg-panel-note"></p><ul class="help" id="cfg-changes"></ul><p class="status" id="cfg-window-note"></p></div>
     <details><summary>Show the configuration file</summary><pre id="config-yaml"></pre></details>
     <button id="prep-btn">Prepare the data</button>
@@ -317,7 +317,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <span class="step">Step 11 (optional)</span>
     <h2>Send us your comments and some basic stats on your study</h2>
     <p class="help">Help us improve the software by sharing some basic stats on your study. We do not track your data or your usage: this page sends nothing itself. The button opens a new email in your email program, addressed to us, holding the summary below: how the page was used and how your study was set up (counts, dates, choices, and group labels). It holds no results, no record of any animal, and no file. Delete any line you prefer not to share, and send it only if you wish. We may write back to ask whether you would share the data.</p>
-    <p class="help"><strong>Comments are welcome at any point, even if you stopped partway or could not get the page to work.</strong> Until mLOS has run, the email holds your comments and what the page knows so far: the versions of this page and the programs, the date, and how far you got; once an export is loaded, how it was loaded, the species, and the export's numbers of rows and columns; and once the data is prepared, the number of prepared rows.</p>
+    <p class="help"><strong>Comments are welcome at any point, even if you stopped partway or could not get the page to work.</strong> Until mLOS has run, the email holds your comments and what the page knows so far: the versions of this page and the programs, the date, and how far you got; once a file is loaded, how it was loaded, the species, and the file's numbers of rows and columns; and once the data is prepared, the number of prepared rows.</p>
     <div class="plea">
       <label for="share-comments"><strong>Please tell us what you think.</strong> Your comments are the most useful part of this email, and the main way we learn what to fix and what to add. What worked? What was confusing, slow, or wrong? What did you wish the page did? A single sentence helps; a few minutes of candid comments helps a great deal. They go on the <code>comments:</code> line at the end of the email, and you can also add to them in the email itself.</label>
       <textarea id="share-comments" rows="5" placeholder="Comments: what worked, what did not, and what would make this tool more useful to your shelter"></textarea>
@@ -442,7 +442,7 @@ function loadText(name, text) {
 const blankName = (h) => !h || /^Unnamed: \d+$/.test(h);
 function loadTable(name, source, head, body) {
   prepStopped = runStopped = false;
-  forgetPrepared('A different export was loaded.');
+  forgetPrepared('A different file was loaded.');
   const keep = head.map((h, i) => i).filter(i => !blankName(head[i]) || body.some(r => (r[i] || '').trim()));
   const dropped = head.length - keep.length;
   // A row with no values, such as a spacer row, is left off the page too, as
@@ -674,7 +674,7 @@ function applyFiles(rebuildDates = false) {
 // What an uploaded configuration reads in place of the file it names.
 function sourceChange() {
   const theirs = ownConfig.source + (ownConfig.sheet ? `, sheet ${ownConfig.sheet}` : '');
-  if (!exportSource) return `It reads the export loaded in step 1 in place of ${theirs}.`;
+  if (!exportSource) return `It reads the file loaded in step 1 in place of ${theirs}.`;
   const ours = exportSource.sheet ? `sheet ${exportSource.sheet} of ${exportName}` : `${exportName}, a CSV file`;
   return `It reads ${ours} in place of ${theirs}.`;
 }
@@ -716,7 +716,7 @@ function configAnswers() {
 function restoreConfig(a) {
   const named = [...Object.values(a.mapping), a.species[0], ...a.notStay.map(r => r.col)].filter(Boolean);
   const missing = [...new Set(named.filter(c => !header.includes(c)))];
-  if (missing.length) throw new Error(`this export has no column named ${missing.join(', ')}`);
+  if (missing.length) throw new Error(`your file has no column named ${missing.join(', ')}`);
   for (const f of FIELDS) $('map-' + f.key).value = a.mapping[f.key] || '';
   $('species-col').value = a.species[0];
   buildSpeciesValues();
@@ -799,7 +799,7 @@ json.dumps(facts)`));
     if (facts.pairs) { facts.shape = cutShape(facts.pairs, todayIso()); delete facts.pairs; }
     if (ownConfig === cfg) { cfg.facts = facts; windowNote(); }
   } catch (err) {
-    if (ownConfig === cfg) { $('cfg-window-note').className = 'status bad'; $('cfg-window-note').textContent = 'ShelterDataPrep could not read the export with this configuration: ' + pyError(err); }
+    if (ownConfig === cfg) { $('cfg-window-note').className = 'status bad'; $('cfg-window-note').textContent = 'ShelterDataPrep could not read your file with this configuration: ' + pyError(err); }
     window.demo.errors.push(String(err));
   }
 }
@@ -821,7 +821,7 @@ $('cfg-input').onchange = async (e) => {
         st.className = 'status ok'; st.textContent = `Filled in steps 2 to 6 from ${f.name}. Change any answer there, then prepare the data.`;
       } else {
         pendingConfigAnswers = { name: f.name, answers: ans.answers };
-        st.className = 'status ok'; st.textContent = `Steps 2 to 6 are filled in from ${f.name} once the export is loaded.`;
+        st.className = 'status ok'; st.textContent = `Steps 2 to 6 are filled in from ${f.name} once your file is loaded.`;
       }
     } catch (err) {
       st.className = 'status bad'; st.textContent = `${f.name} cannot be used: ${err.message}.`;
@@ -1011,7 +1011,7 @@ function drawCarry() {
   if (!carried) carried = new Set(cands.map(c => c.col).filter(c => c === m.animal_size || c === 'age_group'));
   const box = $('carry-cols');
   box.replaceChildren();
-  if (!cands.length) { box.textContent = 'This export has no column with 2 to 20 values to compare animals by.'; return; }
+  if (!cands.length) { box.textContent = 'Your file has no column with 2 to 20 values to compare animals by.'; return; }
   cands.forEach((c, k) => {
     const lab = document.createElement('label');
     lab.style.display = 'block';
@@ -1300,7 +1300,7 @@ function guessText(g) {
   const share = (x) => `${Math.round(100 * x)}%`;
   const start = `In its first ${EDGE} days it has ${g.inEdge.toLocaleString()} intake${g.inEdge === 1 ? '' : 's'} from ${g.a}, ${share(g.inPace)} of its usual pace, and ${g.outEdge.toLocaleString()} outcome${g.outEdge === 1 ? '' : 's'} from ${g.b}, ${share(g.outPace)} of theirs`;
   const end = g.open ? `${g.open.toLocaleString()} stay${g.open === 1 ? '' : 's'} with no outcome date` : 'no stay without an outcome date';
-  return `The export looks ${kind}. ${start}; it has ${end}.` + (ownConfig ? '' : ' The default window assumes this.');
+  return `Your file looks ${kind}. ${start}; it has ${end}.` + (ownConfig ? '' : ' The default window assumes this.');
 }
 // The analysis follows a stay up to the cap, so an export cut by intake date
 // misses nothing once the window starts a cap's length after its first intake.
@@ -1355,30 +1355,30 @@ function windowNote() {
   if (!(s && e && s < e)) problems.push('The first day must come before the stop date.');
   if (facts && facts.intake_date && facts.intake_date.first) {
     const fi = facts.intake_date;
-    lines.push(`The export's intake dates run from ${fi.first} to ${fi.last_real}.`);
+    lines.push(`Your file's intake dates run from ${fi.first} to ${fi.last_real}.`);
     const future = ['intake_date', 'outcome_date', 'dob'].filter(c => facts[c] && facts[c].future.length)
       .map(c => `${{ intake_date: 'intake', outcome_date: 'outcome', dob: 'date of birth' }[c]} ${facts[c].future.slice(0, 3).join(', ')}` + (facts[c].future.length > 3 ? ` and ${facts[c].future.length - 3} more` : ''));
-    if (future.length) warnings.push(`Dates after today, which are errors in the export: ${future.join('; ')}. These checks leave them out.`);
+    if (future.length) warnings.push(`Dates after today, which are errors in the file: ${future.join('; ')}. These checks leave them out.`);
     const limit = stopLimit(facts);
-    if (limit && e > limit.stop) problems.push(`The stop date can be no later than ${limit.stop}, the day after the export's last ${limit.which} (${limit.last}): after that the export records no ${limit.which === 'outcome' ? 'exits, so the animals in care would look as if none ever left' : 'intakes'}. A few days earlier still leaves room for outcomes recorded late.`);
+    if (limit && e > limit.stop) problems.push(`The stop date can be no later than ${limit.stop}, the day after the file's last ${limit.which} (${limit.last}): after that the file records no ${limit.which === 'outcome' ? 'exits, so the animals in care would look as if none ever left' : 'intakes'}. A few days earlier still leaves room for outcomes recorded late.`);
     // One warning for each cut the dates leave possible, each saying what that
     // cut would miss and the window that avoids it.
     const guess = cutGuess(facts);
     if (guess) lines.push(guessText(guess));
     const lead = windowLead(facts), fo = guess && guess.b;
     const byIntake = lead && lead.days < lead.cap, byOutcome = fo && s < fo;
-    if (byIntake) warnings.push(`The window starts ${lead.days} days after the export's first intake, fewer than the ${lead.cap}-day horizon ${ownSettings ? 'in ' + ownSettings.name : 'set in step 8'}. If the export is ${guess && guess.start === 'outcome' ? 'also ' : ''}cut by intake date, holding only animals admitted from ${lead.first} on, animals admitted earlier and still in care on ${s} are missing; the results after the run estimate how many. Starting on or after ${lead.safeStart} avoids the question.`);
-    if (byOutcome) warnings.push(`The export records no outcome before ${fo}, after the window's first day. If it is cut by outcome date, holding only animals that left on or after ${fo}, the animals that left between ${s} and then are missing, and the window's first periods hold only the longer stays. Starting on or after ${fo} avoids the question.`);
+    if (byIntake) warnings.push(`The window starts ${lead.days} days after the file's first intake, fewer than the ${lead.cap}-day horizon ${ownSettings ? 'in ' + ownSettings.name : 'set in step 8'}. If the file is ${guess && guess.start === 'outcome' ? 'also ' : ''}cut by intake date, holding only animals admitted from ${lead.first} on, animals admitted earlier and still in care on ${s} are missing; the results after the run estimate how many. Starting on or after ${lead.safeStart} avoids the question.`);
+    if (byOutcome) warnings.push(`The file records no outcome before ${fo}, after the window's first day. If it is cut by outcome date, holding only animals that left on or after ${fo}, the animals that left between ${s} and then are missing, and the window's first periods hold only the longer stays. Starting on or after ${fo} avoids the question.`);
     if (byIntake && byOutcome) warnings.push(`If it is cut by both, start on or after the later of the two, ${lead.safeStart > fo ? lead.safeStart : fo}.`);
     const os = outcomeStop(facts);
-    if (guess && guess.end === 'outcome' && os && e > os) warnings.push(`No more than one stay in a thousand in the export lacks an outcome date, so it seems to hold no animal still in care. If it is cut by outcome date, holding only animals that left by ${guess.lastOut}, the animals in care on that day are missing, and stays that begin near the stop date look shorter than they were. A stop date on or before ${os}, ${capValue()} days before the day after the last outcome, leaves only stays longer than the horizon missing.`);
+    if (guess && guess.end === 'outcome' && os && e > os) warnings.push(`No more than one stay in a thousand in the file lacks an outcome date, so it seems to hold no animal still in care. If it is cut by outcome date, holding only animals that left by ${guess.lastOut}, the animals in care on that day are missing, and stays that begin near the stop date look shorter than they were. A stop date on or before ${os}, ${capValue()} days before the day after the last outcome, leaves only stays longer than the horizon missing.`);
     if (!ownConfig) {
       const i = header.indexOf(mapping().intake_date);
       const after = rows.map(r => isoOf(r[i])).filter(x => x && x >= e).length;
       if (after) tail.push(`${after.toLocaleString()} intake(s) fall on or after the stop date and will be dropped.`);
     }
   } else if (ownConfig && header.length) {
-    lines.push('Reading the export\'s dates...');
+    lines.push('Reading the file\'s dates...');
   }
   note.className = problems.length ? 'status bad' : warnings.length ? 'status warn' : 'status';
   note.textContent = [...lines, ...problems, ...warnings, ...tail].join(' ');
@@ -2046,7 +2046,7 @@ async function runChecks(out, cap, lead) {
   if (lead && lead.days < lead.cap) {
     const tenure = parseCSV(new TextDecoder().decode(await webR.FS.readFile(out + '/km_in_care_tenure_unified.csv')));
     const at = tenure.slice(1).filter(r => /^\d+$/.test(r[0]) && +r[0] <= lead.days).pop();
-    if (at) items.push({ level: 'warn', text: `The window starts ${lead.days} days after the export's first intake. In a shelter in its usual state, ${pct(+at[1])} of the residents on any day have been in care longer than that, so if the export is cut by intake date, holding only animals admitted from ${lead.first} on, about that share of the residents on the window's first day are missing from it. A shelter emptied or newly opened just before the window loses less.` });
+    if (at) items.push({ level: 'warn', text: `The window starts ${lead.days} days after the file's first intake. In a shelter in its usual state, ${pct(+at[1])} of the residents on any day have been in care longer than that, so if the file is cut by intake date, holding only animals admitted from ${lead.first} on, about that share of the residents on the window's first day are missing from it. A shelter emptied or newly opened just before the window loses less.` });
   }
   const led = res.data_preparation.ledger.columns, j = led.name.indexOf('overlapping_stays');
   if (j >= 0 && led.rows_affected[j] > 0) items.push({ level: 'warn', text: `${led.rows_affected[j].toLocaleString()} stays overlapped another stay of the same animal; the shorter of each pair was dropped (discard_overlapping_rows).` });
