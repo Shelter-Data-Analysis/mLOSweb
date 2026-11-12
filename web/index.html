@@ -40,6 +40,8 @@ select, input[type=file] { max-width:100%; }
 input[type=file] { font-size:15px; }
 input[type=checkbox] { width:16px; height:16px; vertical-align:-2px; }
 .grid2 > * { min-width:0; }
+#mapping { grid-template-columns: fit-content(50%) minmax(0, 1fr); }
+.map-hint { display:block; font-size:13px; color:var(--muted); line-height:1.3; }
 [hidden] { display:none !important; }
 button { font:inherit; font-weight:600; padding:9px 18px; border-radius:6px; border:2px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; align-self:flex-start; }
 button.secondary { background:#fff; color:var(--accent); }
@@ -144,13 +146,13 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
 
   <section id="s1">
     <span class="step">Step 1</span>
-    <h2>Load the export</h2>
-    <p class="help">A CSV file or an Excel workbook (.xlsx or .xlsm) exported from the shelter's software, one row per stay, with the column names in the row above the data. The demo exports are raw files in public deposits, each a different shelter's or a different pull; the deposit of the one chosen is named below the list.</p>
+    <h2>Load your shelter's records</h2>
+    <p class="help">A spreadsheet from your shelter's software, saved as an Excel workbook (.xlsx or .xlsm) or as a CSV file, with one row for each animal's stay and a row of column names above them. To try the page first, use a demo file: each is a real shelter's records, as published for research, with its source named beside the button.</p>
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
-      <select id="demo-sel" aria-label="Demo export" disabled><option>Loading the list of demo exports…</option></select>
-      <button id="load-demo" disabled>Use this demo export</button>
+      <select id="demo-sel" aria-label="Demo file" disabled><option>Loading the list of demo files…</option></select>
+      <button id="load-demo" disabled>Use this demo file</button>
       <span class="help" id="demo-doi"></span>
-      <label class="help">or choose a file: <input type="file" id="file-input" accept=".csv,.gz,.xlsx,.xlsm"></label>
+      <label class="help">or choose your own file: <input type="file" id="file-input" accept=".csv,.gz,.xlsx,.xlsm"></label>
     </div>
     <div class="grid2" id="sheet-row" hidden>
       <label for="sheet-sel">Sheet</label><select id="sheet-sel"></select>
@@ -158,8 +160,8 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <p class="status" id="sheet-note"></p>
     <p class="status" id="s1-status"></p>
     <div class="scroll" id="preview"></div>
-    <details id="files-box"><summary>Already have a ShelterDataPrep configuration or an mLOS settings file?</summary>
-      <p class="help">Either file, or both, can stand in for the steps it covers: a configuration for steps 2 to 6, a settings file for the choices in step 8. Each runs as written, except for the changes the page lists, so a file this page wrote, or one prepared by hand for the programs on your own computer, gives the same results here.</p>
+    <details id="files-box"><summary>Back with the files from an earlier run? (a ShelterDataPrep configuration or an mLOS settings file)</summary>
+      <p class="help">Each run saves two files that record its answers: a ShelterDataPrep configuration, for steps 2 to 6, and an mLOS settings file, for the choices in step 8. Load either, or both, with the same records to give the same answers again. A file this page wrote fills in the answers, to check or change; one edited by hand, or prepared for the programs on your own computer, runs as written, except for the changes the page lists.</p>
       <div class="grid2">
         <label for="cfg-input">ShelterDataPrep configuration</label>
         <span class="file-row"><input type="file" id="cfg-input" accept=".yaml,.yml"><button class="secondary" id="cfg-drop" hidden>Stop using it</button></span>
@@ -173,25 +175,25 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
 
   <section id="s2" class="locked">
     <span class="step">Step 2</span>
-    <h2>Match the columns</h2>
-    <p class="help">Each export names its columns its own way. Pick which column holds each piece of information. Guesses are filled in; check them against the preview above.</p>
+    <h2>Say which column is which</h2>
+    <p class="help">Every shelter's software names its columns its own way. For each item below, pick the column of your file that holds it. The page fills in its best guesses; check them against the first rows of your file, shown above.</p>
     <div class="grid2" id="mapping"></div>
   </section>
 
   <section id="s2b" class="locked">
     <span class="step">Step 3</span>
-    <h2>Choose the animals</h2>
-    <p class="help">An analysis covers one species, so choose the column that names the species and the one to study. Then list any rows that are not shelter stays at all, such as animals dead on arrival, quarantine holds, or animals boarded for another agency. They are removed before anything else looks at the data.</p>
+    <h2>Choose the animals to study</h2>
+    <p class="help">The analysis looks at one species at a time: pick the column that names the species, then the species to study. Then list any records that are not real shelter stays, such as animals dead on arrival, quarantine holds, or animals boarded for another agency. The page sets them aside before anything else.</p>
     <div class="grid2">
       <label for="species-col">Species column</label><select id="species-col"></select>
       <label for="species-val">Species to study</label><select id="species-val"></select>
     </div>
-    <h3 style="margin:8px 0 0">Rows that are not shelter stays</h3>
+    <h3 style="margin:8px 0 0">Records that are not shelter stays</h3>
     <div id="notstay-rules" style="display:flex; flex-direction:column; gap:10px"></div>
     <button class="secondary" id="notstay-add">Add another column</button>
     <p class="status" id="s2b-note"></p>
-    <h3 style="margin:8px 0 0">Columns to compare animals by</h3>
-    <p class="help">Tick the columns the prepared data should carry. The analysis can compare groups of animals by any one of them, chosen in step 8 and changed there without preparing the data again. Listed are the export's columns with 2 to 20 different values, and the age group made in step 6 from the date of birth.</p>
+    <h3 style="margin:8px 0 0">Ways to compare animals</h3>
+    <p class="help">Tick the columns you may want to compare animals by, such as size or sex. Step 8 compares by one of them, and can switch to another without starting over. Listed are your file's columns with 2 to 20 different values, and the age group, which step 6 works out from the date of birth.</p>
     <div class="help" id="carry-cols" style="columns: 2 240px"></div>
   </section>
 
@@ -480,13 +482,13 @@ const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 // The demo exports build_site.py fetched, in the order pins.py lists them.
 // A workbook demo goes the way an uploaded workbook does.
 $('demo-sel').innerHTML = manifest.demos.map((d, k) => `<option value="${k}">${esc(d.label)}</option>`).join('');
-const showDoi = () => { const d = manifest.demos[+$('demo-sel').value]; $('demo-doi').innerHTML = `Deposit: <a href="https://doi.org/${esc(d.doi)}">doi:${esc(d.doi)}</a>`; };
+const showDoi = () => { const d = manifest.demos[+$('demo-sel').value]; $('demo-doi').innerHTML = `Source: <a href="https://doi.org/${esc(d.doi)}">doi:${esc(d.doi)}</a>`; };
 $('demo-sel').onchange = showDoi;
 $('demo-sel').disabled = $('load-demo').disabled = false;
 showDoi();
 $('load-demo').onclick = async () => {
   const d = manifest.demos[+$('demo-sel').value];
-  await startBusy($('load-demo'), 'Loading the demo export...');
+  await startBusy($('load-demo'), 'Loading the demo file...');
   try {
     const r = await fetch('data/' + d.file);
     if (/\.xls[xm]$/i.test(d.file)) await loadWorkbook(new File([await r.blob()], d.file));
@@ -916,18 +918,21 @@ $('set-drop').onclick = () => { ownSettings = null; $('set-status').textContent 
 
 // ---------- step 2: columns ----------
 const FIELDS = [
-  { key: 'animal_id', label: 'Animal ID', hints: ['animalid', 'animal_id', 'animal id', 'animal #'] },
-  { key: 'intake_date', label: 'Intake date', hints: ['indate', 'intake_date', 'intake date', 'in date'] },
-  { key: 'outcome_date', label: 'Outcome date', hints: ['outdate', 'outcome_date', 'outcome date', 'out date'] },
-  { key: 'intake_type', label: 'Intake type', hints: ['intype', 'intake_type', 'intake type'] },
-  { key: 'outcome_type', label: 'Outcome type', hints: ['outtype', 'outcome_type', 'outcome type'] },
-  { key: 'animal_size', label: 'Size (optional, for the size-label rules)', hints: ['petsize', 'animal_size', 'size'] },
-  { key: 'dob', label: 'Date of birth', hints: ['petdob', 'dob', 'date of birth', 'birth date'] },
+  { key: 'animal_id', label: 'Animal ID', hint: 'one for each animal', hints: ['animalid', 'animal_id', 'animal id', 'animal #'] },
+  { key: 'intake_date', label: 'Intake date', hint: 'the day the animal arrived', hints: ['indate', 'intake_date', 'intake date', 'in date'] },
+  { key: 'outcome_date', label: 'Outcome date', hint: 'the day it left; blank while in care', hints: ['outdate', 'outcome_date', 'outcome date', 'out date'] },
+  { key: 'intake_type', label: 'Intake type', hint: 'stray, owner surrender, transfer in, and so on', hints: ['intype', 'intake_type', 'intake type'] },
+  { key: 'outcome_type', label: 'Outcome type', hint: 'adoption, return to owner, transfer, and so on', hints: ['outtype', 'outcome_type', 'outcome type'] },
+  { key: 'animal_size', label: 'Size', hint: 'optional', hints: ['petsize', 'animal_size', 'size'] },
+  { key: 'dob', label: 'Date of birth', hint: 'optional, for age groups', hints: ['petdob', 'dob', 'date of birth', 'birth date'] },
 ];
 function buildMapping() {
   const g = $('mapping'); g.replaceChildren();
   for (const f of FIELDS) {
+    // The name, and under it in smaller type what it is, so a long hint wraps
+    // instead of pushing the column menus out of a phone's width.
     const lab = document.createElement('label'); lab.textContent = f.label; lab.htmlFor = 'map-' + f.key;
+    const hint = document.createElement('span'); hint.className = 'map-hint'; hint.textContent = f.hint; lab.append(hint);
     const sel = document.createElement('select'); sel.id = 'map-' + f.key;
     sel.innerHTML = '<option value="">(choose)</option>' + header.map(h => `<option>${esc(h)}</option>`).join('');
     const guess = header.find(h => f.hints.includes(h.toLowerCase()));
