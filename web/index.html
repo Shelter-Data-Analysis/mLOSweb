@@ -1367,7 +1367,7 @@ function refresh(rebuildDates = true) {
 }
 
 // ---------- step 5: run ShelterDataPrep ----------
-let prepared = null, preparedConfig = null;
+let prepared = null, preparedConfig = null, preparedFacts = null, runFacts = null;
 $('prep-btn').onclick = async () => {
   const st = $('s5-status');
   if (!ownConfig && animalsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose the species in step 3 first.'; return; }
@@ -1379,6 +1379,8 @@ $('prep-btn').onclick = async () => {
   st.textContent = 'Preparing...';
   await paint();
   const t0 = performance.now();
+  // Read with the configuration, after the last wait, so they describe this preparation.
+  const facts = prepFacts();
   try {
     writeExport(py);
     py.globals.set('export_file', exportSource.file);
@@ -1402,6 +1404,7 @@ with contextlib.redirect_stdout(buf):
 buf.getvalue()`);
     mark('prepare', t0);
     prepared = py.FS.readFile('/work/out/prepared.csv', { encoding: 'utf8' });
+    preparedFacts = facts;
     const statsText = py.FS.readFile('/work/out/prepared_stats.csv', { encoding: 'utf8' });
     showPrep(parseCSV(statsText), prepared, statsText);
     st.className = 'status ok';
@@ -1901,6 +1904,7 @@ $('run-btn').onclick = async () => {
   st.textContent = 'Running mLOS...';
   const out = '/out_' + (++runNo);
   const template = await (await fetch('mlos_settings_template.yaml')).text();
+  const facts = { ...preparedFacts, settings_from: ownSettings ? 'uploaded file' : 'page questions' };
   const settingsText = ownSettings ? ownSettings.effective : withAnswers(
     template.replace('animal_group_columns:\n  - __GROUP__\n', groupsYaml(group)).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml())
       .replace('__CAP__', capValue()).replace('__PLOTCAP__', +$('plot-cap').value).replace('__REFERENCES__', referencesYaml()),
@@ -1952,6 +1956,7 @@ $('run-btn').onclick = async () => {
     const wasLeft = leftDuringRun;
     setRunning(false, 'done');
     if (wasLeft) st.textContent += ' The tab was out of sight for part of the run, which can make it take longer.';
+    runFacts = facts;
     await showRun(out, group);
   } catch (e) {
     st.className = 'status bad';
@@ -2129,7 +2134,7 @@ async function showRun(out, group) {
   d.querySelector('pre').textContent = log;
   wrap.append(d);
   // A summary that cannot be written leaves step 11 without one, not the run.
-  try { await shareSummary(out, window.demo.timings.analyze); }
+  try { await shareSummary(out, window.demo.timings.analyze, runFacts); }
   catch (e) { shareText = ''; $('share-preview').textContent = 'The summary could not be written: ' + (e.message || e); window.demo.errors.push(String(e)); }
 }
 
@@ -2229,30 +2234,55 @@ $('share-fallback').append('If no email opens, copy the summary and send it to '
 // belongs to them, so they may run over several lines. summary_format
 // numbers this layout; change it with any change of a key or its meaning.
 let shareRes = null, shareRun = null, deckState = 'not built';
-async function shareSummary(out, seconds) {
+async function shareSummary(out, seconds, facts) {
   shareRes = JSON.parse(new TextDecoder().decode(await webR.FS.readFile(out + '/results.json')));
-  shareRun = { seconds };
+  shareRun = { seconds, facts };
   deckState = 'not built';
   renderShare();
 }
 // Before any run, the email holds the visitor's comments with the versions,
 // the date, and, once an export is loaded, how it was loaded: the keys of the
 // full summary that need no results. Its subject says it holds comments.
-function shareLead() {
-  const demo = manifest.demos.find(d => d.file === exportName);
+function shareLead(f = loadFacts()) {
   return [
     'summary_format: 2',
     `site_commit: ${manifest.site_commit || 'unknown'}`,
     `mlos_version: ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)})`,
     `shelterprep_version: ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)})`,
     `run_date: ${todayIso()}`,
-    ...(!exportSource ? [] : [
-      `export_source: ${demo ? 'demo ' + demo.file : 'own file'}`,
-      `export_type: ${exportSource.sheet != null ? 'workbook' : 'csv'}`,
-      `configuration_from: ${ownConfig ? 'uploaded file' : 'page questions'}`,
-      `settings_from: ${ownSettings ? 'uploaded file' : 'page questions'}`,
+    ...(!f ? [] : [
+      `export_source: ${f.export_source}`,
+      `export_type: ${f.export_type}`,
+      `configuration_from: ${f.configuration_from}`,
+      `settings_from: ${f.settings_from}`,
     ]),
   ];
+}
+// The summary's lines that describe the page rather than the results. A run's
+// summary takes them as they stood for that run: the data's from when it was
+// prepared, the settings file's from when the run started. So a run followed
+// by a new export, or by a change of species, still describes one study.
+function loadFacts() {
+  if (!exportSource) return null;
+  const demo = manifest.demos.find(d => d.file === exportName);
+  return {
+    export_source: demo ? 'demo ' + demo.file : 'own file',
+    export_type: exportSource.sheet != null ? 'workbook' : 'csv',
+    configuration_from: ownConfig ? 'uploaded file' : 'page questions',
+    settings_from: ownSettings ? 'uploaded file' : 'page questions',
+  };
+}
+function prepFacts() {
+  const facts = exportFacts(), guess = facts && cutGuess(facts);
+  return {
+    ...loadFacts(),
+    species: $('species-val').value,
+    export_rows: rows.length,
+    export_columns: header.length,
+    columns_carried: (carried ? [...carried] : []).join(' | ') || 'none',
+    cut_by_date_guess: !guess ? 'unknown' : guess.start === 'outcome' && guess.end === 'outcome' ? 'outcome date'
+      : guess.end === 'outcome' ? 'intake and outcome date' : guess.start === 'outcome' ? 'outcome date at start' : 'intake date or none',
+  };
 }
 const shareComments = () => [
   '# Comments: please write them after "comments:", here or in the email. They help us improve the tool.',
@@ -2272,9 +2302,7 @@ function renderShare() {
   const res = shareRes, dp = res.data_preparation, st = res.settings, all = res.strata.all;
   const r1 = (x) => x == null || !isFinite(x) ? 'NA' : x.toFixed(1);
   const cell = (m, row, col = 0) => { const i = m && m.rows ? m.rows.indexOf(row) : -1; return i < 0 ? null : m.values[i][col]; };
-  const facts = exportFacts(), guess = facts && cutGuess(facts);
-  const cutText = !guess ? 'unknown' : guess.start === 'outcome' && guess.end === 'outcome' ? 'outcome date'
-    : guess.end === 'outcome' ? 'intake and outcome date' : guess.start === 'outcome' ? 'outcome date at start' : 'intake date or none';
+  const f = shareRun.facts;
   const per = st.periods.columns;
   const labels = (k) => [].concat(res.strata[k] ? res.strata[k].labels : []).join(' | ') || 'none';
   const lines = [
@@ -2282,16 +2310,16 @@ function renderShare() {
     'Delete any line you prefer not to share.',
     '',
     '# Run',
-    ...shareLead(),
+    ...shareLead(f),
     `analysis_seconds: ${r1(shareRun.seconds)}`,
     `deck: ${deckState}`,
     '',
     '# Data',
-    `species: ${$('species-val').value}`,
-    `export_rows: ${rows.length}`,
-    `export_columns: ${header.length}`,
-    `columns_carried: ${(carried ? [...carried] : []).join(' | ') || 'none'}`,
-    `cut_by_date_guess: ${cutText}`,
+    `species: ${f.species}`,
+    `export_rows: ${f.export_rows}`,
+    `export_columns: ${f.export_columns}`,
+    `columns_carried: ${f.columns_carried}`,
+    `cut_by_date_guess: ${f.cut_by_date_guess}`,
     `rows_read: ${dp.rows_read}`,
     `rows_analyzed: ${dp.rows_analyzed}`,
     `animals: ${dp.n_animals}`,
