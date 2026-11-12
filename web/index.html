@@ -2024,12 +2024,14 @@ async function runChecks(out, cap, lead) {
   return box;
 }
 
-// The plots shown first answer the four questions at the top of the page, in
-// their order: length of stay by period; by intake type and by animal group;
+// The plots shown first: the overall length-of-stay curve and the in-care
+// tenure curve, which carry their summary statistics on the plot; then the
+// plots that answer the four questions at the top of the page, in their
+// order: length of stay by period; by intake type and by animal group;
 // the remaining stay and the outcome mix by days already in care; and the
 // animals in care by tenure, by animal group, or by intake type when the run
 // compares no animal groups. A default the run did not write is skipped.
-const DEFAULT_PLOTS = ['km_survival_by_period.png', 'km_survival_by_intake_type.png', 'km_survival_by_animal_group.png',
+const DEFAULT_PLOTS = ['km_survival_unified.png', 'km_in_care_tenure_unified.png', 'km_survival_by_period.png', 'km_survival_by_intake_type.png', 'km_survival_by_animal_group.png',
                        'km_remaining_los_unified.png', 'aj_conditional_unified_stack.png', 'km_census_by_tenure_by_animal_group.png'];
 const defaultPlots = (images) => DEFAULT_PLOTS.map(n =>
   n === 'km_census_by_tenure_by_animal_group.png' && !images[n] ? 'km_census_by_tenure_by_intake_type.png' : n);
