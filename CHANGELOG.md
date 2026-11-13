@@ -4,7 +4,12 @@ Each release lists what changed for a visitor to the page, and whether any chang
 
 ## Unreleased
 
-**Numbers.** No numbers move.
+**Numbers.** One change can move a number. Step 3 lists columns with up to 100 values, rather than 20, as ways to compare animals, and ticks the size column to start with. For a file whose size column has 21 to 100 values and that has no date of birth, a run with the starting answers compares animals by size, where it compared no animal groups before. A run with the same answers otherwise gives the same results.
+
+**Step 3, choosing the animals.**
+
+- "Ways to compare animals" lists the columns with 2 to 100 values. Step 8 still merges the chosen column's values into at most six groups.
+- The species list and the values of a column of records that are not shelter stays list up to 100 values, most frequent first, for a column with any number of values. A line under the list gives the number of rarer values, their rows, and their share of the rows; they cannot be chosen. When the listed values cover less than 90% of the rows, the page says the column is not well suited for categories.
 
 **Fixes.**
 
