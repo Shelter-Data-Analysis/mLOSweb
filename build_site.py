@@ -170,6 +170,14 @@ def site_version() -> str:
     return found.group(1)
 
 
+def site_unreleased() -> bool:
+    """Whether the site carries changes made after the release its version
+    names: CHANGELOG.md lists them under an "Unreleased" heading, which a
+    release renames to its version. The footer then says so, since such a build
+    can give results the release does not."""
+    return re.search(r"^## Unreleased\s*$", (HERE / "CHANGELOG.md").read_text(), flags=re.M) is not None
+
+
 def site_commit() -> str:
     """The mLOSweb commit the site is built from, with "+changes" when the
     working tree differs from it, so a run summary names the page it came from."""
@@ -191,7 +199,6 @@ def main() -> None:
         text = source.read_bytes()
         if source.suffix == ".html":
             text = text.replace(b"{{PYODIDE_VERSION}}", pins.PYODIDE_VERSION.encode())
-            text = text.replace(b"{{MLOSWEB_VERSION}}", version.encode())
         write(SITE / source.name, text)
     mlos_files, review_files, mlos_version = mlos()
     sdp_files, sdp_version = shelterprep()
@@ -203,6 +210,8 @@ def main() -> None:
         "mlos": {"version": mlos_version, "commit": pins.MLOS_REF, "files": mlos_files,
                  "review_files": review_files},
         "shelterprep": {"version": sdp_version, "commit": pins.SDP_REF, "files": sdp_files},
+        "site_version": version,
+        "site_unreleased": site_unreleased(),
         "site_commit": site_commit(),
         "webr": pins.WEBR_VERSION,
         "pyodide": pins.PYODIDE_VERSION,

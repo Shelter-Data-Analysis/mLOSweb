@@ -382,7 +382,8 @@ const manifest = await get('manifest.json').then(r => r.json()).catch((e) => {
 });
 const SDP_FILES = manifest.shelterprep.files;
 const MLOS_FILES = manifest.mlos.files;
-$('versions').textContent = `mLOSweb {{MLOSWEB_VERSION}} (commit ${manifest.site_commit}), ` +
+// A build made after the release its version names says so (build_site.py).
+$('versions').textContent = `mLOSweb ${manifest.site_version}${manifest.site_unreleased ? ' plus unreleased changes' : ''} (commit ${manifest.site_commit}), ` +
   `mLOS ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)}), ` +
   `ShelterDataPrep ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)}), ` +
   `webR ${manifest.webr}, Pyodide ${manifest.pyodide}.`;
