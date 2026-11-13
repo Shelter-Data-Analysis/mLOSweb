@@ -1990,6 +1990,10 @@ $('run-btn').onclick = async () => {
   if (!ownSettings && groupCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the animal groups first.'; return; }
   if (!ownSettings && periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
   if (horizonCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the analysis horizon first.'; return; }
+  // What this run is made from, kept so that preparing the data again, or
+  // loading another file, while mLOS runs changes neither what the results
+  // are saved with nor whether they count as current.
+  const from = { data: prepared, config: preparedConfig, files: prepFiles };
   await startBusy($('run-btn'), 'Running mLOS...');
   setRunning(true);
   st.className = 'status'; st.textContent = 'Waiting for R...';
@@ -2004,7 +2008,7 @@ $('run-btn').onclick = async () => {
     settingsAnswers(group));
   window.demo.settingsYaml = settingsText;
   await webR.FS.writeFile('/mlos/settings.yaml', new TextEncoder().encode(settingsText));
-  await webR.FS.writeFile('/mlos/prepared.csv', new TextEncoder().encode(prepared));
+  await webR.FS.writeFile('/mlos/prepared.csv', new TextEncoder().encode(from.data));
   rConsole = [];
   if (ownSettings) {
     // An uploaded file's levels are known only after mLOS has applied its maps
@@ -2047,12 +2051,13 @@ $('run-btn').onclick = async () => {
     lastRunCap = capValue();
     lastRunLead = exportFacts() && windowLead(exportFacts());
     const wasLeft = leftDuringRun;
-    // An answer changed during the run sets the prepared data aside; the
-    // results are then out of date as soon as they appear.
-    setRunning(false, prepared ? 'done' : 'stale');
+    // An answer changed during the run sets the prepared data aside, and
+    // preparing again replaces it; either way the results are out of date
+    // as soon as they appear.
+    setRunning(false, prepared === from.data && preparedConfig === from.config ? 'done' : 'stale');
     if (wasLeft) st.textContent += ' The tab was out of sight for part of the run, which can make it take longer.';
     runFacts = facts;
-    await showRun(out, group);
+    await showRun(out, from);
   } catch (e) {
     st.className = 'status bad';
     st.textContent = 'mLOS stopped: ' + (e.message || e);
@@ -2117,7 +2122,7 @@ const defaultPlots = (images) => DEFAULT_PLOTS.map(n =>
 // The visitor's choice of plots, kept from run to run; null until they make one.
 let chosenPlots = null;
 
-async function showRun(out, group) {
+async function showRun(out, from) {
   const sh = await new webR.Shelter();
   let names;
   try {
@@ -2125,13 +2130,13 @@ async function showRun(out, group) {
     await sh.evalR(`zip::zip('/tmp/mlos_results.zip', files = list.files('${out}'), root = '${out}')`);
     // The two files the run was made from go into the zip beside its outputs.
     await webR.FS.mkdir('/tmp/inputs_' + runNo);
-    await webR.FS.writeFile(`/tmp/inputs_${runNo}/shelterprep_config.yaml`, new TextEncoder().encode(preparedConfig));
+    await webR.FS.writeFile(`/tmp/inputs_${runNo}/shelterprep_config.yaml`, new TextEncoder().encode(from.config));
     await webR.FS.writeFile(`/tmp/inputs_${runNo}/mlos_settings.yaml`, new TextEncoder().encode(window.demo.settingsYaml));
     await sh.evalR(`zip::zip_append('/tmp/mlos_results.zip', files = c('shelterprep_config.yaml', 'mlos_settings.yaml'), root = '/tmp/inputs_${runNo}')`);
   } finally { sh.purge(); }
   window.demo.outputs = names;
   window.demo.outputDir = out;
-  lastRun = { out, names, prep: prepFiles, settings: window.demo.settingsYaml };
+  lastRun = { out, names, prep: from.files, settings: window.demo.settingsYaml };
   deckFiles = null; dropGroup('deck');
   $('s7').classList.remove('locked');
   $('s8').classList.remove('locked');
