@@ -2012,7 +2012,6 @@ let runNo = 0;
 $('run-btn').onclick = async () => {
   const st = $('s6-status');
   const group = $('group-by').value;
-  $('run-results').replaceChildren();
   if (!ownSettings && outcomeCheck().length) { st.className = 'status bad'; st.textContent = 'Classify every outcome label first.'; return; }
   if (!ownSettings && intakeCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the intake groups first.'; return; }
   if (!ownSettings && groupCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the animal groups first.'; return; }
@@ -2024,6 +2023,15 @@ $('run-btn').onclick = async () => {
   const from = { data: prepared, config: preparedConfig, files: prepFiles, name: exportName };
   await startBusy($('run-btn'), 'Running mLOS...');
   setRunning(true);
+  // The earlier run's results are out of sight while mLOS runs, and are
+  // replaced when it finishes (showRun). A run that stops brings them back,
+  // marked out of date, since "Download everything" still holds them.
+  $('run-results').hidden = true;
+  const stop = () => {
+    endBusy($('run-btn'));
+    $('run-results').hidden = false;
+    setRunning(false, $('run-results').childElementCount ? 'stale' : 'idle');
+  };
   st.className = 'status'; st.textContent = 'Waiting for R...';
   let template;
   try {
@@ -2031,7 +2039,7 @@ $('run-btn').onclick = async () => {
     template = await (await get('mlos_settings_template.yaml')).text();
   } catch (e) {
     st.className = 'status bad'; st.textContent = 'mLOS cannot run: ' + (e.message || e) + '.' + RELOAD;
-    endBusy($('run-btn')); setRunning(false);
+    stop();
     return;
   }
   st.textContent = 'Running mLOS...';
@@ -2062,7 +2070,7 @@ $('run-btn').onclick = async () => {
       })`)).toArray();
     } catch (e) {
       st.className = 'status bad'; st.textContent = 'mLOS stopped: ' + rError(e);
-      window.demo.errors.push(String(e)); endBusy($('run-btn')); setRunning(false); runStoppedShare();
+      window.demo.errors.push(String(e)); stop(); runStoppedShare();
       return;
     } finally { sh.purge(); }
     const over = [[n[0], PERIOD_CAP, 'periods'], [n[1], INTAKE_CAP, 'intake groups'], [n[2], GROUP_CAP, 'animal groups']].filter(([k, cap]) => k > cap);
@@ -2070,7 +2078,7 @@ $('run-btn').onclick = async () => {
       st.className = 'status bad';
       st.textContent = `This tool compares at most ${PERIOD_CAP} periods, ${INTAKE_CAP} intake groups, and ${GROUP_CAP} animal groups, and ${ownSettings.name} gives ` +
         over.map(([k, , what]) => `${k} ${what}`).join(' and ') + '. Merge some of them in the file, with its maps or its period dates.';
-      window.demo.capRefusal = st.textContent; endBusy($('run-btn')); setRunning(false); runStoppedShare();
+      window.demo.capRefusal = st.textContent; stop(); runStoppedShare();
       return;
     }
     st.textContent = 'Running mLOS...';
@@ -2095,10 +2103,10 @@ $('run-btn').onclick = async () => {
     await showRun(out, from);
   } catch (e) {
     st.className = 'status bad';
-    st.textContent = 'mLOS stopped: ' + (e.message || e);
+    st.textContent = 'mLOS stopped: ' + rError(e);
     runStopped = true;
     window.demo.errors.push(String(e));
-    setRunning(false);
+    stop();
   }
   endBusy($('run-btn'));
   if (!shareRes) renderShare();
@@ -2158,6 +2166,7 @@ const defaultPlots = (images) => DEFAULT_PLOTS.map(n =>
 let chosenPlots = null;
 
 async function showRun(out, from) {
+  $('run-results').replaceChildren(); $('run-results').hidden = false;
   const sh = await new webR.Shelter();
   let names;
   try {
