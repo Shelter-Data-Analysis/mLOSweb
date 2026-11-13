@@ -18,6 +18,7 @@ Each release lists what changed for a visitor to the page, and whether any chang
 - Dates before 2000 written with a two-digit year, such as a date of birth of 6/15/98, are no longer reported in step 5 as dates after today.
 - When ShelterDataPrep stops, the page shows its whole message, under the visitor's own file name. A message of several lines, such as the one naming a column the file lacks and listing the columns it has, was cut to its first line. The messages for a workbook, a configuration, or a settings file that cannot be read are whole in the same way. No numbers move.
 - Results of a run during which the data was prepared again are marked out of date when they appear, and are saved with the configuration and the prepared data they were made from. They were shown as current, and saved with the newer configuration and data. No numbers move.
+- "Download everything" names its zip, and the file named in its README, after the file the run was made from. After another file was loaded, they carried that file's name. No numbers move.
 
 ## 0.2.0 (2026-11-12)
 
