@@ -1,7 +1,8 @@
 """The exact versions the site is assembled from.
 
 `build_site.py` reads this file and nothing else to decide what to download, so
-a change of version is a change here and nowhere else. The PyPI wheels and the
+a change of version starts here. `CITATION.cff` and `.zenodo.json` cite some of
+these versions, and `check_citation.py` names one that no longer agrees. The PyPI wheels and the
 demo exports carry a digest, checked as each is fetched, and a download that
 does not match stops the build. The two programs are named by commit hash, and
 webR and the R packages by version.

@@ -1146,7 +1146,7 @@ function selectionSteps() {
   return lines.length ? lines.join('\n') + '\n' : '';
 }
 
-// ---------- step 3: dates ----------
+// ---------- step 4: dates ----------
 const FORMATS = [
   { py: 'ISO8601', label: 'Year-month-day', example: '2024-01-31', re: /^(\d{4})-(\d{1,2})-(\d{1,2})([ T].*)?$/, order: [1, 2, 3] },
   { py: '%m/%d/%Y', label: 'Month/day/year', example: '1/31/2024', re: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, order: [3, 1, 2] },
@@ -1191,7 +1191,7 @@ function buildDates() {
   window.demo.dateTotal = values.length;
 }
 
-// ---------- step 4: ages ----------
+// ---------- step 6: ages ----------
 const DEFAULT_AGES = [['JUVENILE', 1], ['YOUNG', 4], ['ADULT', 9], ['SENIOR', 18], ['', ''], ['', '']];
 function buildAges() {
   const tb = $('age-table').tBodies[0];
@@ -1214,7 +1214,7 @@ function ageGroups() {
   return out.sort((x, y) => x[1] - y[1]);
 }
 
-// ---------- step 5: configuration ----------
+// ---------- step 7: configuration ----------
 // The fixed rules, the same for every export, from ShelterDataPrep's
 // configs/mission_viejo.yaml. A rule
 // on the size or the age group is left out when step 2 matches no size or no
@@ -1470,7 +1470,7 @@ function refresh(rebuildDates = true) {
   if (!ownConfig) $('config-yaml').textContent = configYaml();
 }
 
-// ---------- step 5: run ShelterDataPrep ----------
+// ---------- step 7: run ShelterDataPrep ----------
 let prepared = null, preparedConfig = null, preparedFacts = null, runFacts = null;
 $('prep-btn').onclick = async () => {
   const st = $('s5-status');
@@ -1631,7 +1631,7 @@ function showPrep(stats, preparedText, statsText) {
   window.demo.detailRows = detail.length;
 }
 
-// ---------- step 7: outcomes ----------
+// ---------- step 8: outcomes ----------
 const OUTCOME_CLASSES = [
   { key: 'L', label: 'Community live', help: 'adoption, return to owner' },
   { key: 'T', label: 'Other live', help: 'transfer, rescue partner, foster, return to field' },
@@ -1709,7 +1709,7 @@ function outcomesYaml() {
           yamlList('outcome_type_N', list('N'))].join('\n');
 }
 
-// ---------- step 7: intakes ----------
+// ---------- step 8: intakes ----------
 // Kept labels are renamed to their group with intake_type_map, and the group
 // names are listed in intake_filter_pass. A left-out label is never renamed,
 // so it fails the pass filter; no placeholder value is needed.
@@ -1782,7 +1782,7 @@ function intakesYaml() {
   return (pairs.length ? 'intake_type_map:\n' + pairs.join('\n') + '\n' : '') + 'intake_filter_pass:\n' + pass.join('\n');
 }
 
-// ---------- step 7: periods ----------
+// ---------- step 8: periods ----------
 const addDay = (iso, n) => { const t = new Date(iso + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 const labelEdited = {};
 function periodSpec() {
@@ -1834,10 +1834,6 @@ function periodCheck() {
 ['win-start', 'win-end'].forEach(id => $(id).addEventListener('change', () => {
   windowEdited = true;
   refresh(false);
-  if (prepared) {
-    prepared = null; markStale(); lock('s6'); $('prep-results').replaceChildren();
-    $('s5-status').className = 'status warn'; $('s5-status').textContent = 'The window changed. Prepare the data again.';
-  }
 }));
 function periodsYaml() {
   const { bounds } = periodSpec();
@@ -1845,7 +1841,7 @@ function periodsYaml() {
     '\nperiod_labels:\n' + periodLabels().map(l => `  - ${JSON.stringify(l)}`).join('\n');
 }
 
-// ---------- step 7: animal groups ----------
+// ---------- step 8: animal groups ----------
 // Any prepared column beyond the ones every analysis reads is one carried
 // from step 3, and can group the animals. Its values are merged into at most
 // GROUP_CAP groups with animal_group_map, and a left-out value is cut with
@@ -1969,7 +1965,7 @@ function referencesYaml() {
   return lines.map(l => l + '\n').join('');
 }
 
-// ---------- step 7: run mLOS ----------
+// ---------- step 8: run mLOS ----------
 // The banner above the Run button asks the user to stay on this tab. While a
 // run is going it turns red; if the tab is hidden during the run, the banner
 // and the tab's title say so, and the banner keeps saying so after the user
@@ -2189,7 +2185,6 @@ async function showRun(out, from) {
   lastRun = { out, names, prep: from.files, settings: window.demo.settingsYaml, name: from.name };
   deckFiles = null; dropGroup('deck');
   lock('s7', false);
-  $('s8').classList.remove('locked');
   $('deck-results').replaceChildren();
   $('s7-status').textContent = '';
   window.demo.webR = webR;
