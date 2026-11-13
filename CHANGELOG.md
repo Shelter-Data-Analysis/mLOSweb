@@ -9,7 +9,7 @@ Each release lists what changed for a visitor to the page, and whether any chang
 **Step 3, choosing the animals.**
 
 - "Ways to compare animals" lists the columns with 2 to 100 values. Step 8 still merges the chosen column's values into at most six groups.
-- The species list and the values of a column of records that are not shelter stays list up to 100 values, most frequent first, for a column with any number of values. A line under the list gives the number of rarer values and their rows; they cannot be chosen.
+- The species list and the values of a column of records that are not shelter stays list up to 100 values, most frequent first, for a column with any number of values. A line under the list gives the number of rarer values, their rows, and their share of the rows; they cannot be chosen. When the listed values cover less than 90% of the rows, the page says the column is not well suited for categories.
 
 **Fixes.**
 
