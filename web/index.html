@@ -383,7 +383,8 @@ const manifest = await get('manifest.json').then(r => r.json()).catch((e) => {
 const SDP_FILES = manifest.shelterprep.files;
 const MLOS_FILES = manifest.mlos.files;
 // A build made after the release its version names says so (build_site.py).
-$('versions').textContent = `mLOSweb ${manifest.site_version}${manifest.site_unreleased ? ' plus unreleased changes' : ''} (commit ${manifest.site_commit}), ` +
+const SITE_VERSION = `${manifest.site_version}${manifest.site_unreleased ? ' plus unreleased changes' : ''} (commit ${manifest.site_commit})`;
+$('versions').textContent = `mLOSweb ${SITE_VERSION}, ` +
   `mLOS ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)}), ` +
   `ShelterDataPrep ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)}), ` +
   `webR ${manifest.webr}, Pyodide ${manifest.pyodide}.`;
@@ -2394,6 +2395,8 @@ $('share-fallback').append('If no email opens, copy the summary and send it to '
 // belongs to them, so they may run over several lines. summary_format
 // numbers this layout; change it with any change of a key or its meaning.
 // Format 3 added the summary sent before a run, with stage and prepared_rows.
+// Format 4 names the page as the footer does, on mlosweb_version, which takes
+// the place of site_commit.
 let shareRes = null, shareRun = null, deckState = 'not built';
 async function shareSummary(out, seconds, facts) {
   shareRes = JSON.parse(new TextDecoder().decode(await webR.FS.readFile(out + '/results.json')));
@@ -2408,8 +2411,8 @@ async function shareSummary(out, seconds, facts) {
 // Its subject says it holds comments.
 function shareLead(f = loadFacts()) {
   return [
-    'summary_format: 3',
-    `site_commit: ${manifest.site_commit || 'unknown'}`,
+    'summary_format: 4',
+    `mlosweb_version: ${SITE_VERSION}`,
     `mlos_version: ${manifest.mlos.version} (commit ${manifest.mlos.commit.slice(0, 7)})`,
     `shelterprep_version: ${manifest.shelterprep.version} (commit ${manifest.shelterprep.commit.slice(0, 7)})`,
     `run_date: ${todayIso()}`,
