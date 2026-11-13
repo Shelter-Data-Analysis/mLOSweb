@@ -14,6 +14,7 @@ Each release lists what changed for a visitor to the page, and whether any chang
 **Fixes.**
 
 - "Write the email" in step 11 no longer raises the warning about leaving the page with files not downloaded. Opening an email leaves the page where it is.
+- A column whose name has two spaces in a row, or a line break, can be chosen in steps 2 and 3. Before, the page looked for the name with single spaces, found no such column, and the preparation stopped. No numbers move.
 
 ## 0.2.0 (2026-11-12)
 

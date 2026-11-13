@@ -945,7 +945,7 @@ function buildMapping() {
     const lab = document.createElement('label'); lab.textContent = f.label; lab.htmlFor = 'map-' + f.key;
     const hint = document.createElement('span'); hint.className = 'map-hint'; hint.textContent = f.hint; lab.append(hint);
     const sel = document.createElement('select'); sel.id = 'map-' + f.key;
-    sel.innerHTML = '<option value="">(choose)</option>' + header.map(h => `<option>${esc(h)}</option>`).join('');
+    sel.innerHTML = '<option value="">(choose)</option>' + header.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('');
     const guess = header.find(h => f.hints.includes(h.toLowerCase()));
     if (guess) sel.value = guess;
     sel.onchange = () => { drawCarry(); refresh(); };
@@ -992,7 +992,7 @@ function stepKey(col) {
 }
 function columnOptions(selected, none) {
   return `<option value="">${none}</option>` +
-    header.filter(Boolean).map(h => `<option ${h === selected ? 'selected' : ''}>${esc(h)}</option>`).join('');
+    header.filter(Boolean).map(h => `<option value="${esc(h)}" ${h === selected ? 'selected' : ''}>${esc(h)}</option>`).join('');
 }
 function buildAnimals() {
   const guess = header.find(h => /animal.?type|species/i.test(h)) || '';
