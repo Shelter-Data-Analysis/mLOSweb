@@ -367,7 +367,19 @@ const mark = (k, t0) => { window.demo.timings[k] = Math.round(performance.now() 
 
 // ---------- runtimes, started at once in the background ----------
 // manifest.json is written by build_site.py: the pinned versions and the files to load.
-const manifest = await (await fetch('manifest.json')).json();
+// A file of the page itself, or an error naming it: fetch alone resolves for
+// a missing file, and the page would then run on the server's error text.
+async function get(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url} could not be loaded (HTTP ${r.status})`);
+  return r;
+}
+const RELOAD = ' Reload the page to try again.';
+const manifest = await get('manifest.json').then(r => r.json()).catch((e) => {
+  $('runtime-status').textContent = 'The page could not start: ' + (e.message || e) + '.' + RELOAD;
+  $('demo-sel').options[0].textContent = 'The demo files could not be listed';
+  throw e;
+});
 const SDP_FILES = manifest.shelterprep.files;
 const MLOS_FILES = manifest.mlos.files;
 $('versions').textContent = `mLOSweb {{MLOSWEB_VERSION}} (commit ${manifest.site_commit}), ` +
@@ -381,7 +393,7 @@ const pyReady = (async () => {
   await py.loadPackage(['pandas', 'pyyaml']);
   py.FS.mkdirTree('/sdp/shelterprep');
   for (const f of SDP_FILES) {
-    py.FS.writeFile('/sdp/shelterprep/' + f, await (await fetch('sdp/shelterprep/' + f)).text());
+    py.FS.writeFile('/sdp/shelterprep/' + f, await (await get('sdp/shelterprep/' + f)).text());
   }
   py.runPython("import sys; sys.path.insert(0, '/sdp'); import shelterprep");
   mark('python ready', t0);
@@ -398,7 +410,7 @@ const rReady = (async () => {
   await webR.evalRVoid('suppressPackageStartupMessages({library(survival); library(openxlsx)})');
   await webR.FS.mkdir('/mlos');
   for (const f of MLOS_FILES) {
-    await webR.FS.writeFile('/mlos/' + f, new Uint8Array(await (await fetch(root + 'mlos/' + f)).arrayBuffer()));
+    await webR.FS.writeFile('/mlos/' + f, new Uint8Array(await (await get(root + 'mlos/' + f)).arrayBuffer()));
   }
   mark('R ready', t0);
   return webR;
@@ -406,7 +418,7 @@ const rReady = (async () => {
 
 Promise.all([pyReady, rReady]).then(() => {
   $('runtime-status').textContent = 'Python and R are ready (' + window.demo.timings['python ready'] + ' s and ' + window.demo.timings['R ready'] + ' s to start).';
-}, (e) => { $('runtime-status').textContent = 'Could not start: ' + e; window.demo.errors.push(String(e)); });
+}, (e) => { $('runtime-status').textContent = 'Python or R could not start: ' + (e.message || e) + '.' + RELOAD; window.demo.errors.push(String(e)); });
 
 // ---------- step 1: load ----------
 // exportSource is the file ShelterDataPrep reads in place of the export: its
@@ -495,7 +507,7 @@ $('load-demo').onclick = async () => {
   const d = manifest.demos[+$('demo-sel').value];
   await startBusy($('load-demo'), 'Loading the demo file...');
   try {
-    const r = await fetch('data/' + d.file);
+    const r = await get('data/' + d.file);
     if (/\.xls[xm]$/i.test(d.file)) await loadWorkbook(new File([await r.blob()], d.file));
     else { await readingNote(d.file); loadText(d.file, await r.text()); }
   } catch (e) {
@@ -844,7 +856,11 @@ $('cfg-input').onchange = async (e) => {
     applyFiles(true);
     return;
   }
-  const py = await pyReady;
+  let py;
+  try { py = await pyReady; } catch (err) {
+    st.className = 'status bad'; st.textContent = `Python could not start, so ${f.name} cannot be checked.` + RELOAD;
+    return;
+  }
   py.FS.mkdirTree('/work');
   py.FS.writeFile('/work/upload_config.yaml', text);
   try {
@@ -895,7 +911,11 @@ $('set-input').onchange = async (e) => {
     applyFiles();
     return;
   }
-  const py = await pyReady;
+  let py;
+  try { py = await pyReady; } catch (err) {
+    st.className = 'status bad'; st.textContent = `Python could not start, so ${f.name} cannot be checked.` + RELOAD;
+    return;
+  }
   py.FS.mkdirTree('/work');
   py.FS.writeFile('/work/upload_settings.yaml', text);
   try {
@@ -1458,7 +1478,12 @@ $('prep-btn').onclick = async () => {
   $('prep-results').replaceChildren(); lock('s6');
   await startBusy($('prep-btn'), 'Preparing the data...');
   st.className = 'status'; st.textContent = 'Waiting for Python...';
-  const py = await pyReady;
+  let py;
+  try { py = await pyReady; } catch (e) {
+    st.className = 'status bad'; st.textContent = 'Python could not start, so the data cannot be prepared.' + RELOAD;
+    endBusy($('prep-btn'));
+    return;
+  }
   st.textContent = 'Preparing...';
   await paint();
   const t0 = performance.now();
@@ -2000,10 +2025,17 @@ $('run-btn').onclick = async () => {
   await startBusy($('run-btn'), 'Running mLOS...');
   setRunning(true);
   st.className = 'status'; st.textContent = 'Waiting for R...';
-  await rReady;
+  let template;
+  try {
+    await rReady;
+    template = await (await get('mlos_settings_template.yaml')).text();
+  } catch (e) {
+    st.className = 'status bad'; st.textContent = 'mLOS cannot run: ' + (e.message || e) + '.' + RELOAD;
+    endBusy($('run-btn')); setRunning(false);
+    return;
+  }
   st.textContent = 'Running mLOS...';
   const out = '/out_' + (++runNo);
-  const template = await (await fetch('mlos_settings_template.yaml')).text();
   const facts = { ...preparedFacts, settings_from: ownSettings ? 'uploaded file' : 'page questions' };
   const settingsText = ownSettings ? ownSettings.effective : withAnswers(
     template.replace('animal_group_columns:\n  - __GROUP__\n', groupsYaml(group)).replace('__PERIODS__', periodsYaml()).replace('__OUTCOMES__', outcomesYaml()).replace('__INTAKES__', intakesYaml())
@@ -2533,7 +2565,7 @@ function loadDeckBuilder() {
     await py.runPythonAsync('import micropip\nawait micropip.install(list(wheel_urls), deps=False)');
     for (const f of manifest.mlos.review_files) {
       py.FS.mkdirTree('/review/mlos_review');
-      py.FS.writeFile('/review/' + f, new Uint8Array(await (await fetch(root + 'mlos/' + f)).arrayBuffer()));
+      py.FS.writeFile('/review/' + f, new Uint8Array(await (await get(root + 'mlos/' + f)).arrayBuffer()));
     }
     py.runPython("import sys; sys.path.insert(0, '/review'); import mlos_review.deck");
     mark('deck builder ready', t0);
