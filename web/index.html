@@ -174,14 +174,14 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     </details>
   </section>
 
-  <section id="s2" class="locked">
+  <section id="s2" class="locked" inert>
     <span class="step">Step 2</span>
     <h2>Say which column is which</h2>
     <p class="help">Every shelter's software names its columns its own way. For each item below, pick the column of your file that holds it. The page fills in its best guesses; check them against the first rows of your file, shown above.</p>
     <div class="grid2" id="mapping"></div>
   </section>
 
-  <section id="s2b" class="locked">
+  <section id="s2b" class="locked" inert>
     <span class="step">Step 3</span>
     <h2>Choose the animals to study</h2>
     <p class="help">The analysis looks at one species at a time: pick the column that names the species, then the species to study. Then list any records that are not real shelter stays, such as animals dead on arrival, quarantine holds, or animals boarded for another agency. The page sets them aside before anything else.</p>
@@ -199,7 +199,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <div class="help" id="carry-cols" style="columns: 2 240px"></div>
   </section>
 
-  <section id="s3" class="locked">
+  <section id="s3" class="locked" inert>
     <span class="step">Step 4</span>
     <h2>Choose the date format</h2>
     <p class="help">The page tries each format on every date in the three date columns. The right format reads all of them. When two formats both read every date, the file cannot tell them apart: check a date you know.</p>
@@ -207,7 +207,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <p class="status" id="date-note"></p>
   </section>
 
-  <section id="s3b" class="locked">
+  <section id="s3b" class="locked" inert>
     <span class="step">Step 5</span>
     <h2>Set the study window</h2>
     <p class="help">The span of time to study, from its first day up to, but not including, its stop date. Every stay that overlaps it is kept, including animals already in care on the first day. The analysis later divides this window into periods.</p>
@@ -218,7 +218,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <p class="status" id="win-note"></p>
   </section>
 
-  <section id="s4" class="locked">
+  <section id="s4" class="locked" inert>
     <span class="step">Step 6</span>
     <h2>Define the age groups</h2>
     <p class="help">Age at intake is computed from the date of birth. Each group runs up to and including its upper age; an animal older than the last group is dropped, and one with no date of birth is counted as _UNKNOWN_.</p>
@@ -229,7 +229,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <p class="help">Leave a name blank to drop that row.</p>
   </section>
 
-  <section id="s5" class="locked">
+  <section id="s5" class="locked" inert>
     <span class="step">Step 7</span>
     <h2>Prepare the data</h2>
     <p class="help">These choices become a ShelterDataPrep configuration file. Its other rules are not asked about: they are taken from ShelterDataPrep's configuration for Mission Viejo and are the same for every file, and "Show the configuration file" lists them. One of them renames size labels written the Mission Viejo way, such as LARGE, and changes nothing in a file that does not use them. Outcome and intake labels pass through unchanged and are classified in step 8.</p>
@@ -240,7 +240,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <div id="prep-results"></div>
   </section>
 
-  <section id="s6" class="locked">
+  <section id="s6" class="locked" inert>
     <span class="step">Step 8</span>
     <h2>Run the analysis</h2>
     <div id="set-panel" hidden><p class="status warn" id="set-panel-note"></p><ul class="help" id="set-changes"></ul>
@@ -295,7 +295,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <div id="run-results"></div>
   </section>
 
-  <section id="s7" class="locked">
+  <section id="s7" class="locked" inert>
     <span class="step">Step 9</span>
     <h2>Build the slide deck and its tables</h2>
     <p class="help">This step runs a second program, the deck builder mlos_review, which comes with mLOS and reads the analysis results. It writes a PowerPoint deck of findings and a workbook of the tables the deck draws on. On your own computer the same builder runs as <code>python3 -m mlos_review.deck</code>.</p>
@@ -305,7 +305,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <div id="deck-results"></div>
   </section>
 
-  <section id="s9" class="locked">
+  <section id="s9" class="locked" inert>
     <span class="step">Step 10</span>
     <h2>Save everything</h2>
     <p class="help">One zip file holding every file this page made: the prepared data, the mLOS results, and the slide deck and its tables if they were built. The ShelterDataPrep configuration and the mLOS settings file sit at the top of the zip, ready to reuse. Nothing is kept once this tab is closed or reloaded.</p>
@@ -358,6 +358,9 @@ function endBusy(btn) {
   if (btn.dataset.idle != null) { btn.innerHTML = btn.dataset.idle; delete btn.dataset.idle; }
   btn.classList.remove('busy'); btn.removeAttribute('aria-busy'); btn.disabled = false;
 }
+// A locked step waits on an earlier one. It is dimmed, and inert, so that
+// neither the pointer nor the keyboard reaches its controls.
+function lock(id, on = true) { $(id).classList.toggle('locked', on); $(id).inert = on; }
 const root = new URL('./', location.href).href;
 window.demo = { timings: {}, errors: [] };
 const mark = (k, t0) => { window.demo.timings[k] = Math.round(performance.now() - t0) / 1000; };
@@ -465,7 +468,7 @@ function loadTable(name, source, head, body) {
   $('preview').replaceChildren(t);
   buildMapping();
   buildAnimals();
-  $('s5').classList.remove('locked');
+  lock('s5', false);
   buildAges();
   windowEdited = false;
   if (dividersSet === 'user') dividersSet = null;
@@ -647,7 +650,7 @@ function otherKind(text, kind) {
 }
 function forgetPrepared(why) {
   if (!prepared) return;
-  prepared = null; markStale(); $('s6').classList.add('locked'); $('s7').classList.add('locked'); $('prep-results').replaceChildren();
+  prepared = null; markStale(); lock('s6'); lock('s7'); $('prep-results').replaceChildren();
   prepFiles = null; dropGroup('prep'); saveRefresh();
   $('s5-status').className = 'status warn'; $('s5-status').textContent = why + ' Prepare the data again.';
 }
@@ -663,7 +666,7 @@ for (const type of ['input', 'change']) document.addEventListener(type, (e) => {
 });
 function applyFiles(rebuildDates = false) {
   if (!shareRes) renderShare();
-  if (header.length) for (const id of ['s2', 's2b', 's3', 's3b', 's4']) $(id).classList.toggle('locked', !!ownConfig);
+  if (header.length) for (const id of ['s2', 's2b', 's3', 's3b', 's4']) lock(id, !!ownConfig);
   $('cfg-drop').hidden = !ownConfig;
   $('set-drop').hidden = !ownSettings;
   $('cfg-panel').hidden = !ownConfig;
@@ -1452,7 +1455,7 @@ $('prep-btn').onclick = async () => {
   const st = $('s5-status');
   if (!ownConfig && animalsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose the species in step 3 first.'; return; }
   if (windowNote().length) { st.className = 'status bad'; st.textContent = 'Fix the study window first' + (ownConfig ? ', in the configuration file.' : ', in step 5.'); return; }
-  $('prep-results').replaceChildren(); $('s6').classList.add('locked');
+  $('prep-results').replaceChildren(); lock('s6');
   await startBusy($('prep-btn'), 'Preparing the data...');
   st.className = 'status'; st.textContent = 'Waiting for Python...';
   const py = await pyReady;
@@ -1490,7 +1493,7 @@ buf.getvalue()`);
     showPrep(parseCSV(statsText), prepared, statsText);
     st.className = 'status ok';
     st.textContent = `Prepared in ${window.demo.timings.prepare} s.`;
-    $('s6').classList.remove('locked');
+    lock('s6', false);
     buildOutcomes();
     buildIntakes();
     buildGroupBy();
@@ -1806,7 +1809,7 @@ function periodCheck() {
   windowEdited = true;
   refresh(false);
   if (prepared) {
-    prepared = null; markStale(); $('s6').classList.add('locked'); $('prep-results').replaceChildren();
+    prepared = null; markStale(); lock('s6'); $('prep-results').replaceChildren();
     $('s5-status').className = 'status warn'; $('s5-status').textContent = 'The window changed. Prepare the data again.';
   }
 }));
@@ -2138,7 +2141,7 @@ async function showRun(out, from) {
   window.demo.outputDir = out;
   lastRun = { out, names, prep: from.files, settings: window.demo.settingsYaml, name: from.name };
   deckFiles = null; dropGroup('deck');
-  $('s7').classList.remove('locked');
+  lock('s7', false);
   $('s8').classList.remove('locked');
   $('deck-results').replaceChildren();
   $('s7-status').textContent = '';
@@ -2263,7 +2266,7 @@ function saveSet() {
 }
 function saveRefresh() {
   const set = saveSet();
-  $('s9').classList.toggle('locked', !set.prep && !set.run);
+  lock('s9', !set.prep && !set.run);
   const items = [
     [!!set.prep, 'The prepared data, the full step table, and the ShelterDataPrep configuration', 'from step 7'],
     [!!set.run, set.run ? `The mLOS results, ${set.run.names.length} files, with the settings file` : 'The mLOS results and settings file', 'from step 8'],
