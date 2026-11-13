@@ -1118,8 +1118,11 @@ const FORMATS = [
   { py: '%d/%m/%Y', label: 'Day/month/year', example: '31/1/2024', re: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, order: [3, 2, 1] },
   { py: '%m/%d/%y', label: 'Month/day/two-digit year', example: '1/31/24', re: /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/, order: [3, 1, 2] },
 ];
+// A two-digit year, as ShelterDataPrep reads it (Python's %y): 69 to 99 are
+// 1969 to 1999, and 00 to 68 are 2000 to 2068.
+const fullYear = (y) => y >= 100 ? y : y >= 69 ? 1900 + y : 2000 + y;
 function validDate(y, m, d) {
-  if (y < 100) y += 2000;
+  y = fullYear(y);
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
@@ -1234,7 +1237,7 @@ age_groups: {${ages.map(([n, a]) => `${n}: ${a}`).join(', ')}}
 function isoOf(v) {
   const f = FORMATS.find(f => f.py === dateFormat), x = f && f.re.exec((v || '').trim());
   if (!x) return null;
-  let y = +x[f.order[0]]; if (y < 100) y += 2000;
+  const y = fullYear(+x[f.order[0]]);
   return `${y}-${String(+x[f.order[1]]).padStart(2, '0')}-${String(+x[f.order[2]]).padStart(2, '0')}`;
 }
 // The export's date range, as the window checks need it: for each date column
