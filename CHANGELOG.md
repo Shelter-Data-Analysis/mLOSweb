@@ -16,6 +16,7 @@ Each release lists what changed for a visitor to the page, and whether any chang
 - "Write the email" in step 11 no longer raises the warning about leaving the page with files not downloaded. Opening an email leaves the page where it is.
 - A column whose name has two spaces in a row, or a line break, can be chosen in steps 2 and 3. Before, the page looked for the name with single spaces, found no such column, and the preparation stopped. No numbers move.
 - Dates before 2000 written with a two-digit year, such as a date of birth of 6/15/98, are no longer reported in step 5 as dates after today.
+- When ShelterDataPrep stops, the page shows its whole message, under the visitor's own file name. A message of several lines, such as the one naming a column the file lacks and listing the columns it has, was cut to its first line. The messages for a workbook, a configuration, or a settings file that cannot be read are whole in the same way. No numbers move.
 
 ## 0.2.0 (2026-11-12)
 

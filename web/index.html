@@ -55,6 +55,7 @@ button.secondary.busy { background:#e3f1ec; }
 button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
 .status { font-size:15px; color:var(--muted); }
 .status.ok { color:var(--ok); } .status.bad { color:var(--bad); font-weight:600; } .status.warn { color:var(--warn); }
+.status.lines { white-space:pre-line; }
 .grid2 { display:grid; grid-template-columns: max-content 1fr; gap:8px 12px; align-items:center; }
 pre { background:#f0f2f0; border:1px solid var(--line); border-radius:6px; padding:10px; font-size:13px; overflow:auto; max-height:360px; margin:0; }
 details summary { cursor:pointer; color:var(--accent); font-size:15px; font-weight:600; }
@@ -621,10 +622,20 @@ const FORCED_OFF = [
   ['aj_conditional_ci', 'its confidence bounds refit the outcome curves once per day of tenure, which doubles the run'],
 ];
 const PERIOD_CAP = 4;
+// A Python error as the page shows it: the exception's whole message, which
+// can run over several lines, without the traceback above it or the class
+// name before it. The message starts at the first line at the margin after
+// the last traceback.
 function pyError(e) {
   const msg = String(e.message || e).split('\n').filter(Boolean);
-  return (msg.find(l => /Error:/.test(l)) || msg[msg.length - 1]).replace(/^[\w.]*Error: /, '');
+  const trace = msg.findLastIndex(l => l.startsWith('Traceback (most recent call last)'));
+  const at = trace < 0 ? -1 : msg.findIndex((l, i) => i > trace && !/^\s/.test(l));
+  const text = at < 0 ? msg.find(l => /Error:/.test(l)) || msg[msg.length - 1] : msg.slice(at).join('\n');
+  return text.replace(/^[\w.]*Error: /, '');
 }
+// An error from ShelterDataPrep reading the visitor's file names that file as
+// the visitor knows it, not by its name in Python's file system.
+const prepError = (e) => pyError(e).replaceAll(exportSource.file, exportName);
 // An R error's message without the call that raised it, which names mLOS internals.
 const rError = (e) => String(e.message || e).replace(/^Error in [\s\S]*?: /, '');
 // A file loaded in the other program's place says so before any other message.
@@ -800,7 +811,7 @@ json.dumps(facts)`));
     if (facts.pairs) { facts.shape = cutShape(facts.pairs, todayIso()); delete facts.pairs; }
     if (ownConfig === cfg) { cfg.facts = facts; windowNote(); }
   } catch (err) {
-    if (ownConfig === cfg) { $('cfg-window-note').className = 'status bad'; $('cfg-window-note').textContent = 'ShelterDataPrep could not read your file with this configuration: ' + pyError(err); }
+    if (ownConfig === cfg) { $('cfg-window-note').className = 'status bad lines'; $('cfg-window-note').textContent = 'ShelterDataPrep could not read your file with this configuration: ' + prepError(err); }
     window.demo.errors.push(String(err));
   }
 }
@@ -1486,9 +1497,8 @@ buf.getvalue()`);
     buildReferences();
     window.demo.prepReport = report;
   } catch (e) {
-    const msg = String(e.message || e).split('\n').filter(Boolean);
-    st.className = 'status bad';
-    st.textContent = 'ShelterDataPrep stopped: ' + (msg.find(l => /Error:/.test(l)) || msg[msg.length - 1]);
+    st.className = 'status bad lines';
+    st.textContent = 'ShelterDataPrep stopped: ' + prepError(e);
     window.demo.errors.push(String(e));
     prepStopped = true;
   }
