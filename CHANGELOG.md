@@ -25,6 +25,8 @@ Each release lists what changed for a visitor to the page, and whether any chang
 - The page's footer reads "mLOSweb X.Y.Z plus unreleased changes" when the page carries changes made after release X.Y.Z, those this file lists under "Unreleased". It read as the release itself. No numbers move.
 - An age group or a carried column whose name YAML reads as something other than text, such as NO, ON, TRUE, or 1_2, is written to the configuration in quotes, so ShelterDataPrep reads the name as typed. No numbers move for other names.
 
+**Email to the mLOS team (step 11).** The summary names the version of the page, as the footer does, on an `mlosweb_version:` line that takes the place of `site_commit:`. `summary_format` is 4. No numbers move.
+
 ## 0.2.0 (2026-11-12)
 
 **Numbers.** One change can move a number. In 0.1.0, a run made after changing an answer in steps 2 to 6 (the columns, the date format, the species, the records left out, or the age groups) analyzed the data prepared from the earlier answers. The page now asks to prepare the data again, so such a run uses the answers shown on the page. A run with unchanged answers gives the same results as in 0.1.0. mLOS moves from 0.5.0 to 0.5.1, which adds the plot titles and changes no number: on the Irvine workbook run of 2026-11-11, every number in `results.json` agreed with the 0.5.0 run.
