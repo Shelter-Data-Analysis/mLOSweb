@@ -1993,7 +1993,7 @@ $('run-btn').onclick = async () => {
   // What this run is made from, kept so that preparing the data again, or
   // loading another file, while mLOS runs changes neither what the results
   // are saved with nor whether they count as current.
-  const from = { data: prepared, config: preparedConfig, files: prepFiles };
+  const from = { data: prepared, config: preparedConfig, files: prepFiles, name: exportName };
   await startBusy($('run-btn'), 'Running mLOS...');
   setRunning(true);
   st.className = 'status'; st.textContent = 'Waiting for R...';
@@ -2136,7 +2136,7 @@ async function showRun(out, from) {
   } finally { sh.purge(); }
   window.demo.outputs = names;
   window.demo.outputDir = out;
-  lastRun = { out, names, prep: from.files, settings: window.demo.settingsYaml };
+  lastRun = { out, names, prep: from.files, settings: window.demo.settingsYaml, name: from.name };
   deckFiles = null; dropGroup('deck');
   $('s7').classList.remove('locked');
   $('s8').classList.remove('locked');
@@ -2257,7 +2257,9 @@ async function showRun(out, from) {
 let prepFiles = null, deckFiles = null;
 function saveSet() {
   const prep = lastRun ? lastRun.prep : prepFiles;
-  return { prep, run: lastRun, deck: lastRun ? deckFiles : null };
+  // The set is named after the file its run was made from, which another
+  // file loaded since does not change.
+  return { prep, run: lastRun, deck: lastRun ? deckFiles : null, name: lastRun ? lastRun.name : exportName };
 }
 function saveRefresh() {
   const set = saveSet();
@@ -2272,7 +2274,7 @@ function saveRefresh() {
   $('save-stale').hidden = !(set.run && (shownState === 'stale' || !prepared));
 }
 const README_TXT = (set) => [
-  'Files made by mLOS Web, ' + new Date().toISOString().slice(0, 10) + ', from ' + exportName + '.',
+  'Files made by mLOS Web, ' + new Date().toISOString().slice(0, 10) + ', from ' + set.name + '.',
   $('versions').textContent,
   '',
   'shelterprep_config.yaml  the ShelterDataPrep configuration that prepared the data.',
@@ -2290,7 +2292,7 @@ $('save-btn').onclick = async () => {
   st.className = 'status'; st.textContent = 'Putting the files together...';
   try {
     const py = await pyReady;
-    const base = 'mlos_' + (exportName.replace(/\.[^.]*$/, '').replace(/\.(csv|xlsx|xlsm)$/i, '').replace(/[^A-Za-z0-9_-]+/g, '_') || 'export') + '_' + new Date().toISOString().slice(0, 10);
+    const base = 'mlos_' + (set.name.replace(/\.[^.]*$/, '').replace(/\.(csv|xlsx|xlsm)$/i, '').replace(/[^A-Za-z0-9_-]+/g, '_') || 'export') + '_' + new Date().toISOString().slice(0, 10);
     const root = '/everything/' + base;
     for (const d of ['1_prepared', '2_results', '3_deck']) py.FS.mkdirTree(root + '/' + d);
     const put = (path, data) => py.FS.writeFile(root + '/' + path, typeof data === 'string' ? new TextEncoder().encode(data) : data);
