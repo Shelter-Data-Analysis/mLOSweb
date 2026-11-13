@@ -989,6 +989,13 @@ function buildMapping() {
   }
 }
 const mapping = () => Object.fromEntries(FIELDS.map(f => [f.key, $('map-' + f.key).value]));
+// The pieces of information ShelterDataPrep cannot prepare the data without,
+// by the labels of step 2, that have no column chosen.
+const REQUIRED = ['animal_id', 'intake_date', 'outcome_date', 'intake_type', 'outcome_type'];
+function columnsCheck() {
+  const m = mapping();
+  return FIELDS.filter(f => REQUIRED.includes(f.key) && !m[f.key]).map(f => f.label);
+}
 
 // ---------- step 3: animals ----------
 // The species and the rows that are not shelter stays become ShelterDataPrep
@@ -1475,6 +1482,7 @@ function refresh(rebuildDates = true) {
 let prepared = null, preparedConfig = null, preparedFacts = null, runFacts = null;
 $('prep-btn').onclick = async () => {
   const st = $('s5-status');
+  if (!ownConfig && columnsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose a column in step 2 first for: ' + columnsCheck().join(', ') + '.'; return; }
   if (!ownConfig && animalsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose the species in step 3 first.'; return; }
   if (windowNote().length) { st.className = 'status bad'; st.textContent = 'Fix the study window first' + (ownConfig ? ', in the configuration file.' : ', in step 5.'); return; }
   $('prep-results').replaceChildren(); lock('s6');
