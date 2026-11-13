@@ -22,6 +22,7 @@ Each release lists what changed for a visitor to the page, and whether any chang
 - A step that waits on an earlier one takes no keyboard input, as it already took no click. The Tab key reached its buttons, and pressing one, such as "Run mLOS" before any data was prepared, failed without a message. A screen reader passes over a waiting step until it opens. No numbers move.
 - When the page, Python, or R cannot start, or a file of the page cannot be loaded, the page says so and asks for a reload. The line under the title kept saying that Python and R were starting, and "Prepare the data" and "Run mLOS" kept turning without end. No numbers move.
 - The results of the last run stay on the page when "Run mLOS" is pressed with an answer of step 8 still to fix, and come back, marked out of date, when a run stops. They were cleared in both cases, while "Download everything" still held them. No numbers move.
+- The page's footer reads "mLOSweb X.Y.Z plus unreleased changes" when the page carries changes made after release X.Y.Z, those this file lists under "Unreleased". It read as the release itself. No numbers move.
 
 ## 0.2.0 (2026-11-12)
 
