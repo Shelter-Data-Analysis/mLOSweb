@@ -4,7 +4,7 @@ Each release lists what changed for a visitor to the page, and whether any chang
 
 ## Unreleased
 
-**Numbers.** One change can move a number. Step 3 lists columns with up to 100 values, rather than 20, as ways to compare animals, and ticks the size column to start with. For a file whose size column has 21 to 100 values and that has no date of birth, a run with the starting answers compares animals by size, where it compared no animal groups before. A run with the same answers otherwise gives the same results.
+**Numbers.** Two changes can move a number. Step 3 lists columns with up to 100 values, rather than 20, as ways to compare animals, and ticks the size column to start with. For a file whose size column has 21 to 100 values and that has no date of birth, a run with the starting answers compares animals by size, where it compared no animal groups before. The page reads a two-digit year from 69 to 99 as 1969 to 1999, as ShelterDataPrep does, where it read 2069 to 2099. For a file in the month/day/two-digit year format with intake or outcome dates before 2000, the window that step 5 starts with changes, and with it the results of a run that keeps that window. A run with the same answers otherwise gives the same results.
 
 **Step 3, choosing the animals.**
 
@@ -15,6 +15,7 @@ Each release lists what changed for a visitor to the page, and whether any chang
 
 - "Write the email" in step 11 no longer raises the warning about leaving the page with files not downloaded. Opening an email leaves the page where it is.
 - A column whose name has two spaces in a row, or a line break, can be chosen in steps 2 and 3. Before, the page looked for the name with single spaces, found no such column, and the preparation stopped. No numbers move.
+- Dates before 2000 written with a two-digit year, such as a date of birth of 6/15/98, are no longer reported in step 5 as dates after today.
 
 ## 0.2.0 (2026-11-12)
 
