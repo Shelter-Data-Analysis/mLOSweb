@@ -193,7 +193,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <button class="secondary" id="notstay-add">Add another column</button>
     <p class="status" id="s2b-note"></p>
     <h3 style="margin:8px 0 0">Ways to compare animals</h3>
-    <p class="help">Tick the columns you may want to compare animals by, such as size or sex. Step 8 compares by one of them, and can switch to another without starting over. Listed are your file's columns with 2 to 20 different values, and the age group, which step 6 works out from the date of birth.</p>
+    <p class="help">Tick the columns you may want to compare animals by, such as size or sex. Step 8 compares by one of them, and can switch to another without starting over. Listed are your file's columns with 2 to 100 different values, and the age group, which step 6 works out from the date of birth.</p>
     <div class="help" id="carry-cols" style="columns: 2 240px"></div>
   </section>
 
@@ -957,7 +957,9 @@ const mapping = () => Object.fromEntries(FIELDS.map(f => [f.key, $('map-' + f.ke
 // The species and the rows that are not shelter stays become ShelterDataPrep
 // cut steps, run right after the study window, so mLOS never sees those rows.
 // Values are compared as ShelterDataPrep reads them: trimmed, blank as _UNKNOWN_.
-const VALUE_LIST_MAX = 60, NOTSTAY_RULES_MAX = 3;
+// A column's values are listed most frequent first, at most VALUE_LIST_MAX
+// of them; the rest are summed in one line and cannot be chosen.
+const VALUE_LIST_MAX = 100, NOTSTAY_RULES_MAX = 3;
 const cellValue = (v) => (v || '').trim() || '_UNKNOWN_';
 let notStay = [{ col: '', values: new Set() }];
 function valueCounts(col, withinSpecies) {
@@ -972,6 +974,11 @@ function valueCounts(col, withinSpecies) {
   }
   return Object.entries(c).sort((a, b) => b[1] - a[1]);
 }
+function unlisted(counts) {
+  const rest = counts.slice(VALUE_LIST_MAX);
+  return { values: rest.length, rows: rest.reduce((a, [, n]) => a + n, 0) };
+}
+const unlistedText = (u) => `${u.values.toLocaleString()} rarer ${u.values === 1 ? 'value' : 'values'} (${u.rows.toLocaleString()} rows), not listed`;
 function stepKey(col) {
   // A column matched in step 2 is known to ShelterDataPrep by its canonical name.
   const m = mapping(), f = FIELDS.find(f => m[f.key] === col);
@@ -997,7 +1004,7 @@ function buildAnimals() {
 // any column of the export with 2 to CARRY_MAX values, other than those
 // step 2 matches to a field every analysis reads and the species column, and
 // the age group. The size column and the age group are ticked to start with.
-const CARRY_MAX = 20;
+const CARRY_MAX = 100;
 let carried = null;
 function carryCandidates() {
   const m = mapping(), skip = new Set([m.animal_id, m.intake_date, m.outcome_date, m.intake_type, m.outcome_type, m.dob, $('species-col').value]);
@@ -1011,7 +1018,7 @@ function drawCarry() {
   if (!carried) carried = new Set(cands.map(c => c.col).filter(c => c === m.animal_size || c === 'age_group'));
   const box = $('carry-cols');
   box.replaceChildren();
-  if (!cands.length) { box.textContent = 'Your file has no column with 2 to 20 values to compare animals by.'; return; }
+  if (!cands.length) { box.textContent = `Your file has no column with 2 to ${CARRY_MAX} values to compare animals by.`; return; }
   cands.forEach((c, k) => {
     const lab = document.createElement('label');
     lab.style.display = 'block';
@@ -1033,8 +1040,10 @@ function carriedColumns(age) {
 function buildSpeciesValues() {
   const counts = valueCounts($('species-col').value, false);
   const sel = $('species-val');
-  sel.innerHTML = counts.length > VALUE_LIST_MAX ? '<option value="">(this column has too many values to be a species)</option>' :
-    '<option value="">(choose)</option>' + counts.map(([v, n]) => `<option value="${esc(v)}">${esc(shownLabel(v))} (${n.toLocaleString()} rows)</option>`).join('');
+  const u = unlisted(counts);
+  sel.innerHTML = '<option value="">(choose)</option>' +
+    counts.slice(0, VALUE_LIST_MAX).map(([v, n]) => `<option value="${esc(v)}">${esc(shownLabel(v))} (${n.toLocaleString()} rows)</option>`).join('') +
+    (u.values ? `<option value="" disabled>${esc(unlistedText(u))}</option>` : '');
   sel.onchange = () => { drawNotStay(); animalsCheck(); };
 }
 function drawNotStay() {
@@ -1047,14 +1056,19 @@ function drawNotStay() {
     const vals = box.querySelector('#notstay-vals-' + k);
     if (rule.col) {
       const counts = valueCounts(rule.col, true);
-      if (counts.length > VALUE_LIST_MAX) vals.textContent = `This column has ${counts.length.toLocaleString()} different values, too many to list; choose a column of categories.`;
-      else counts.forEach(([v, n], j) => {
+      counts.slice(0, VALUE_LIST_MAX).forEach(([v, n], j) => {
         const lab = document.createElement('label');
         lab.style.display = 'block';
         lab.innerHTML = `<input type="checkbox" id="notstay-${k}-${j}" ${rule.values.has(v) ? 'checked' : ''}> ${esc(shownLabel(v))} (${n.toLocaleString()})`;
         lab.querySelector('input').onchange = (e) => { e.target.checked ? rule.values.add(v) : rule.values.delete(v); animalsCheck(); };
         vals.append(lab);
       });
+      const u = unlisted(counts);
+      if (u.values) {
+        const more = document.createElement('div');
+        more.textContent = 'And ' + unlistedText(u) + '.';
+        vals.append(more);
+      }
     }
     wrap.append(box);
   });
