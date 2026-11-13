@@ -24,6 +24,7 @@ Each release lists what changed for a visitor to the page, and whether any chang
 - The results of the last run stay on the page when "Run mLOS" is pressed with an answer of step 8 still to fix, and come back, marked out of date, when a run stops. They were cleared in both cases, while "Download everything" still held them. No numbers move.
 - The page's footer reads "mLOSweb X.Y.Z plus unreleased changes" when the page carries changes made after release X.Y.Z, those this file lists under "Unreleased". It read as the release itself. No numbers move.
 - An age group or a carried column whose name YAML reads as something other than text, such as NO, ON, TRUE, or 1_2, is written to the configuration in quotes, so ShelterDataPrep reads the name as typed. No numbers move for other names.
+- Each run of mLOS frees the memory the run before it held in the tab: its folder of results and the plots and download links made from it. A run that stops frees its own folder. Before, every run's results stayed in memory until the tab closed. No numbers move.
 
 **Email to the mLOS team (step 11).** The summary names the version of the page, as the footer does, on an `mlosweb_version:` line that takes the place of `site_commit:`. `summary_format` is 4. No numbers move.
 
