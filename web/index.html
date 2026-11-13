@@ -1233,7 +1233,7 @@ steps:
         KITEN:  _UNKNOWN_
         905V:   _UNKNOWN_
 ` : '') + (age ? `  - map: {age_group: {_NEGATIVE_: _UNKNOWN_}}
-` : '') + (age && size ? `  - map: {age_group: {_UNKNOWN_: ${firstAge}}}
+` : '') + (age && size ? `  - map: {age_group: {_UNKNOWN_: ${yamlName(firstAge)}}}
     where: {animal_size: PUPPY}
 ` : '') + `  - cut: {night_sign: "-1"}
 ` + (age ? `  - cut: {age_group: _OVER_}
@@ -1264,7 +1264,7 @@ window_start_date: ${$('win-start').value}
 window_stop_date:  ${$('win-end').value}
 
 ` + (age ? `# step 6: age groups, each up to and including its upper age in years
-age_groups: {${ages.map(([n, a]) => `${n}: ${a}`).join(', ')}}
+age_groups: {${ages.map(([n, a]) => `${yamlName(n)}: ${a}`).join(', ')}}
 ` : `# step 6: no age groups, since step 2 matches no date-of-birth column
 `) + fixedRules(size, age, ages.length ? ages[0][0] : '_UNKNOWN_');
 }
@@ -1853,7 +1853,12 @@ function periodsYaml() {
 // the settings leave out animal_group_columns and mLOS compares no groups.
 const CORE_COLUMNS = ['animal_id', 'intake_date', 'outcome_date', 'outcome_type', 'intake_type'];
 const GROUP_LABELS = { age_group: 'age group', animal_size: 'animal_size (the size column of step 2)' };
-const yamlName = (n) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(n) ? n : JSON.stringify(n);
+// A name as YAML reads it back: bare when it is a plain word, and quoted
+// otherwise, including the words a YAML reader takes as true, false, or
+// nothing (an age group named NO; PyYAML reads Y and N as text, and other
+// readers do not) and a name of digits (1_2), which it reads as a number.
+const YAML_WORDS = /^(y|n|yes|no|on|off|true|false|null)$/i;
+const yamlName = (n) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(n) && !YAML_WORDS.test(n) ? n : JSON.stringify(n);
 let groupChoice = {};
 function buildGroupBy() {
   const cols = parseCSV(prepared, 1)[0].filter(c => !CORE_COLUMNS.includes(c));
