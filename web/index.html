@@ -202,7 +202,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
   <section id="s3" class="locked" inert>
     <span class="step">Step 4</span>
     <h2>Choose the date format</h2>
-    <p class="help">The page tries each format on every date in the three date columns. The right format reads all of them. When two formats both read every date, the file cannot tell them apart: check a date you know.</p>
+    <p class="help">The page tries each format it knows on every date in the three date columns, and lists the ones that read at least one. The right format reads all of them. When two formats both read every date, the file cannot tell them apart: check a date you know. A time written beside a date, such as 1/31/2024 14:30, is read and left out.</p>
     <div class="scroll"><table id="date-table"></table></div>
     <p class="status" id="date-note"></p>
   </section>
@@ -1156,11 +1156,42 @@ function selectionSteps() {
 
 // ---------- step 4: dates ----------
 const FORMATS = [
-  { py: 'ISO8601', label: 'Year-month-day', example: '2024-01-31', re: /^(\d{4})-(\d{1,2})-(\d{1,2})([ T].*)?$/, order: [1, 2, 3] },
-  { py: '%m/%d/%Y', label: 'Month/day/year', example: '1/31/2024', re: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, order: [3, 1, 2] },
-  { py: '%d/%m/%Y', label: 'Day/month/year', example: '31/1/2024', re: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, order: [3, 2, 1] },
-  { py: '%m/%d/%y', label: 'Month/day/two-digit year', example: '1/31/24', re: /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/, order: [3, 1, 2] },
+  { py: 'ISO8601', label: 'Year-month-day', re: /^(\d{4})-(\d{1,2})-(\d{1,2})([ T].*)?$/, order: [1, 2, 3] },
+  { py: '%m/%d/%Y', label: 'Month/day/year', re: /^(\d{1,2})\/(\d{1,2})\/(\d{4})(.*)$/, order: [3, 1, 2] },
+  { py: '%d/%m/%Y', label: 'Day/month/year', re: /^(\d{1,2})\/(\d{1,2})\/(\d{4})(.*)$/, order: [3, 2, 1] },
+  { py: '%m/%d/%y', label: 'Month/day/two-digit year', re: /^(\d{1,2})\/(\d{1,2})\/(\d{2})(.*)$/, order: [3, 1, 2] },
 ];
+// What may follow the date in a value: nothing, or a time of day in one of
+// four shapes. `py` is what the shape adds to ShelterDataPrep's date_format.
+// The year-month-day format takes no shape: ShelterDataPrep's ISO8601 reads
+// a time after the date by itself.
+const TIMES = [
+  { py: '', re: /^()()()$/ },
+  { py: ' %H:%M', re: /^ +(\d{1,2}):(\d{1,2})()$/ },
+  { py: ' %H:%M:%S', re: /^ +(\d{1,2}):(\d{1,2}):(\d{1,2})$/ },
+  { py: ' %I:%M %p', re: /^ +(\d{1,2}):(\d{1,2})() +[AP]M$/i, h12: true },
+  { py: ' %I:%M:%S %p', re: /^ +(\d{1,2}):(\d{1,2}):(\d{1,2}) +[AP]M$/i, h12: true },
+];
+function timeOk(rest, t) {
+  const x = t.re.exec(rest);
+  if (!x) return false;
+  const h = +x[1];
+  return (t.h12 ? h >= 1 && h <= 12 : h <= 23) && +x[2] <= 59 && +x[3] <= 59;
+}
+// The time shape, by its place in TIMES, that a value has when format f reads
+// its date; -1 when f does not read the value.
+function timeShape(v, f) {
+  const x = f.re.exec(v);
+  if (!x || !validDate(+x[f.order[0]], +x[f.order[1]], +x[f.order[2]])) return -1;
+  return f.py === 'ISO8601' ? 0 : TIMES.findIndex(t => timeOk(x[4], t));
+}
+// The date in a value, as YYYY-MM-DD, when format f reads it with time shape
+// k; null otherwise.
+function readDate(v, f, k) {
+  if (timeShape(v, f) !== k) return null;
+  const x = f.re.exec(v);
+  return `${fullYear(+x[f.order[0]])}-${String(+x[f.order[1]]).padStart(2, '0')}-${String(+x[f.order[2]]).padStart(2, '0')}`;
+}
 // A two-digit year, as ShelterDataPrep reads it (Python's %y): 69 to 99 are
 // 1969 to 1999, and 00 to 68 are 2000 to 2068.
 const fullYear = (y) => y >= 100 ? y : y >= 69 ? 1900 + y : 2000 + y;
@@ -1169,34 +1200,83 @@ function validDate(y, m, d) {
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
-let dateFormat = null;
+// The format chosen in step 4 says how the date is written. Whether a time
+// follows it, and in which shape, is read from each date column by itself
+// (dateTimes, by place in TIMES): ShelterDataPrep takes a format for each
+// date column, so the columns need not agree.
+const DATE_COLUMNS = ['intake_date', 'outcome_date', 'dob'];
+let dateFormat = null, dateTimes = {}, datesUnread = false;
 function buildDates() {
   const m = mapping();
-  const cols = ['intake_date', 'outcome_date', 'dob'].map(k => header.indexOf(m[k])).filter(i => i >= 0);
-  const values = [];
-  for (const r of rows) for (const i of cols) { const v = (r[i] || '').trim(); if (v) values.push(v); }
-  const t = $('date-table');
-  t.innerHTML = '<thead><tr><th></th><th>Format</th><th>Example</th><th class="num">Dates read</th><th class="num">Not read</th></tr></thead>';
-  const body = document.createElement('tbody');
-  const counts = FORMATS.map(f => values.filter(v => { const x = f.re.exec(v); return x && validDate(+x[f.order[0]], +x[f.order[1]], +x[f.order[2]]); }).length);
+  const cols = DATE_COLUMNS.map(k => [k, header.indexOf(m[k])]).filter(([, i]) => i >= 0);
+  // For each format, each date column, and each time shape, the values read.
+  const tally = FORMATS.map(() => Object.fromEntries(cols.map(([k]) => [k, TIMES.map(() => 0)])));
+  const example = FORMATS.map(() => null), unread = [];
+  let total = 0;
+  for (const r of rows) for (const [k, i] of cols) {
+    const v = (r[i] || '').trim();
+    if (!v) continue;
+    total++;
+    let read = false;
+    FORMATS.forEach((f, n) => {
+      const t = timeShape(v, f);
+      if (t < 0) return;
+      tally[n][k][t]++; read = true;
+      if (example[n] === null) example[n] = v;
+    });
+    if (!read && unread.length < 3 && !unread.includes(v)) unread.push(v);
+  }
+  // A column's time shape under a format is the one that reads the most of its values.
+  const shapes = tally.map(byCol => Object.fromEntries(cols.map(([k]) => [k, byCol[k].indexOf(Math.max(...byCol[k]))])));
+  const counts = tally.map((byCol, n) => cols.reduce((sum, [k]) => sum + byCol[k][shapes[n][k]], 0));
   const best = Math.max(...counts);
   if (!dateFormat || counts[FORMATS.findIndex(f => f.py === dateFormat)] < best) dateFormat = FORMATS[counts.indexOf(best)].py;
-  FORMATS.forEach((f, k) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td><input type="radio" name="datefmt" id="fmt-${k}" value="${f.py}" ${f.py === dateFormat ? 'checked' : ''}></td>
-      <td><label for="fmt-${k}">${f.label}</label></td><td>${f.example}</td>
-      <td class="num">${counts[k].toLocaleString()}</td><td class="num">${(values.length - counts[k]).toLocaleString()}</td>`;
-    tr.querySelector('input').onchange = (e) => { dateFormat = e.target.value; refresh(false); };
-    body.append(tr);
-  });
-  t.append(body);
-  const full = FORMATS.filter((f, k) => counts[k] === values.length && values.length > 0);
+  const chosen = FORMATS.findIndex(f => f.py === dateFormat);
+  dateTimes = shapes[chosen];
+  datesUnread = total > 0 && best === 0;
+  const t = $('date-table');
+  t.replaceChildren();
+  // A year-month-day value with a time after it, which that format reads without a shape.
+  const isoTime = /[ T]\d/;
+  // A format that reads no date is left out; the one that reads the most comes first.
+  const listed = FORMATS.map((f, n) => n).filter(n => counts[n] > 0).sort((a, b) => counts[b] - counts[a]);
+  if (listed.length) {
+    t.innerHTML = '<thead><tr><th></th><th>Format</th><th>From your file</th><th class="num">Dates read</th><th class="num">Not read</th></tr></thead>';
+    const body = document.createElement('tbody');
+    for (const n of listed) {
+      const f = FORMATS[n], timed = cols.some(([k]) => shapes[n][k] > 0) || (n === 0 && isoTime.test(example[n]));
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><input type="radio" name="datefmt" id="fmt-${n}" value="${f.py}" ${n === chosen ? 'checked' : ''}></td>
+        <td><label for="fmt-${n}">${f.label}${timed ? ', with a time' : ''}</label></td><td>${esc(example[n])}</td>
+        <td class="num">${counts[n].toLocaleString()}</td><td class="num">${(total - counts[n]).toLocaleString()}</td>`;
+      tr.querySelector('input').onchange = (e) => { dateFormat = e.target.value; refresh(false); };
+      body.append(tr);
+    }
+    t.append(body);
+  }
+  const full = FORMATS.filter((f, n) => counts[n] === total && total > 0);
+  const timeNote = cols.some(([k]) => dateTimes[k] > 0) || (chosen === 0 && isoTime.test(example[0] || '')) ? ' The time written beside a date is left out.' : '';
   const note = $('date-note');
-  if (full.length > 1) { note.className = 'status warn'; note.textContent = 'Every date reads as ' + full.map(f => f.label.toLowerCase()).join(' and as ') + '. Check one date you know before going on.'; }
-  else if (counts[FORMATS.findIndex(f => f.py === dateFormat)] < values.length) { note.className = 'status warn'; note.textContent = 'No format reads every date. Dates that are not read are treated as missing, and ShelterDataPrep counts them.'; }
-  else { note.className = 'status ok'; note.textContent = 'One format reads every date: ' + FORMATS.find(f => f.py === dateFormat).label.toLowerCase() + '.'; }
-  window.demo.dateCounts = Object.fromEntries(FORMATS.map((f, k) => [f.py, counts[k]]));
-  window.demo.dateTotal = values.length;
+  if (!total) { note.className = 'status'; note.textContent = cols.length ? 'The date columns chosen in step 2 hold no values.' : ''; }
+  else if (datesUnread) { note.className = 'status bad'; note.textContent = `None of the date formats this page knows reads the dates in your file, such as ${unread.map(v => `"${v}"`).join(', ')}. The page cannot prepare this file as it is.`; }
+  else if (full.length > 1) { note.className = 'status warn'; note.textContent = 'Every date reads as ' + full.map(f => f.label.toLowerCase()).join(' and as ') + '. Check one date you know before going on.' + timeNote; }
+  else if (counts[chosen] < total) { note.className = 'status warn'; note.textContent = 'No format reads every date. Dates that are not read are treated as missing, and ShelterDataPrep counts them.' + timeNote; }
+  else { note.className = 'status ok'; note.textContent = 'One format reads every date: ' + FORMATS[chosen].label.toLowerCase() + '.' + timeNote; }
+  window.demo.dateCounts = Object.fromEntries(FORMATS.map((f, n) => [f.py, counts[n]]));
+  window.demo.dateTotal = total;
+  window.demo.dateTimes = Object.fromEntries(cols.map(([k]) => [k, TIMES[dateTimes[k]].py]));
+}
+// ShelterDataPrep's format for a date column: the chosen format with the
+// column's time shape. The intake date's is the configuration's date_format,
+// and a column that differs from it gets a line under date_format_override.
+function columnFormat(col) {
+  return dateFormat === 'ISO8601' ? dateFormat : dateFormat + TIMES[dateTimes[col] || 0].py;
+}
+function dateFormatYaml() {
+  const m = mapping(), main = columnFormat('intake_date');
+  const own = ['outcome_date', 'dob'].filter(k => m[k] && columnFormat(k) !== main);
+  return `date_format: ${JSON.stringify(main)}\n` +
+    (own.length ? 'date_format_override:\n' + own.map(k => `  ${k}: ${JSON.stringify(columnFormat(k))}\n`).join('') : '');
 }
 
 // ---------- step 6: ages ----------
@@ -1258,8 +1338,7 @@ function configBody() {
 # dest_dir name the page's own files; change them to run this file on your computer.
 source_dir:  "/work"
 source_file: ${JSON.stringify(exportSource.file)}
-${exportSource.sheet === null ? '' : `sheet:       ${JSON.stringify(exportSource.sheet)}\n`}date_format: ${JSON.stringify(dateFormat)}
-dest_dir:    "/work/out"
+${exportSource.sheet === null ? '' : `sheet:       ${JSON.stringify(exportSource.sheet)}\n`}${dateFormatYaml()}dest_dir:    "/work/out"
 dest_file:   "prepared.csv"
 output_columns: [${['animal_id', 'intake_date', 'outcome_date', 'outcome_type', 'intake_type', ...carriedColumns(age)].map(yamlName).join(', ')}]
 
@@ -1277,11 +1356,9 @@ age_groups: {${ages.map(([n, a]) => `${yamlName(n)}: ${a}`).join(', ')}}
 `) + fixedRules(size, age, ages.length ? ages[0][0] : '_UNKNOWN_');
 }
 
-function isoOf(v) {
-  const f = FORMATS.find(f => f.py === dateFormat), x = f && f.re.exec((v || '').trim());
-  if (!x) return null;
-  const y = fullYear(+x[f.order[0]]);
-  return `${y}-${String(+x[f.order[1]]).padStart(2, '0')}-${String(+x[f.order[2]]).padStart(2, '0')}`;
+function isoOf(v, col) {
+  const f = FORMATS.find(f => f.py === dateFormat);
+  return f ? readDate((v || '').trim(), f, dateTimes[col] || 0) : null;
 }
 // The export's date range, as the window checks need it: for each date column
 // its first date, its last date up to today, and the dates after today; and,
@@ -1298,13 +1375,13 @@ function formFacts() {
   for (const col of ['intake_date', 'outcome_date', 'dob']) {
     const i = header.indexOf(m[col]);
     if (i < 0) continue;
-    const d = rows.map(r => isoOf(r[i])).filter(Boolean).sort();
+    const d = rows.map(r => isoOf(r[i], col)).filter(Boolean).sort();
     const real = d.filter(x => x <= today);
     facts[col] = { first: d[0] || null, last_real: real.length ? real[real.length - 1] : null, future: d.filter(x => x > today) };
   }
   const ii = header.indexOf(m.intake_date), oi = header.indexOf(m.outcome_date);
   if (ii >= 0 && oi >= 0)
-    facts.shape = cutShape(rows.map(r => [isoOf(r[ii]), (r[oi] || '').trim() ? isoOf(r[oi]) || '?' : null]), today);
+    facts.shape = cutShape(rows.map(r => [isoOf(r[ii], 'intake_date'), (r[oi] || '').trim() ? isoOf(r[oi], 'outcome_date') || '?' : null]), today);
   factsCache = { key, facts };
   return facts;
 }
@@ -1442,7 +1519,7 @@ function windowNote() {
     if (guess && guess.end === 'outcome' && os && e > os) warnings.push(`No more than one stay in a thousand in the file lacks an outcome date, so it seems to hold no animal still in care. If it is cut by outcome date, holding only animals that left by ${guess.lastOut}, the animals in care on that day are missing, and stays that begin near the stop date look shorter than they were. A stop date on or before ${os}, ${capValue()} days before the day after the last outcome, leaves only stays longer than the horizon missing.`);
     if (!ownConfig) {
       const i = header.indexOf(mapping().intake_date);
-      const after = rows.map(r => isoOf(r[i])).filter(x => x && x >= e).length;
+      const after = rows.map(r => isoOf(r[i], 'intake_date')).filter(x => x && x >= e).length;
       if (after) tail.push(`${after.toLocaleString()} intake(s) fall on or after the stop date and will be dropped.`);
     }
   } else if (ownConfig && header.length) {
@@ -1483,6 +1560,7 @@ let prepared = null, preparedConfig = null, preparedFacts = null, runFacts = nul
 $('prep-btn').onclick = async () => {
   const st = $('s5-status');
   if (!ownConfig && columnsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose a column in step 2 first for: ' + columnsCheck().join(', ') + '.'; return; }
+  if (!ownConfig && datesUnread) { st.className = 'status bad'; st.textContent = 'No date format in step 4 reads the dates in your file, so the data cannot be prepared.'; return; }
   if (!ownConfig && animalsCheck().length) { st.className = 'status bad'; st.textContent = 'Choose the species in step 3 first.'; return; }
   if (windowNote().length) { st.className = 'status bad'; st.textContent = 'Fix the study window first' + (ownConfig ? ', in the configuration file.' : ', in step 5.'); return; }
   $('prep-results').replaceChildren(); lock('s6');

@@ -64,6 +64,43 @@ same('validDate, day 0', validDate(2024, 5, 0), false);
 same('validDate, a two-digit year', validDate(98, 6, 15), true);
 same('validDate, 29 February of the two-digit year 00, read as 2000', validDate(0, 2, 29), true);
 
+// ---------- timeShape and readDate ----------
+// The four formats of step 4 and the time shapes that may follow a date.
+// The shape is the place in TIMES: 0 none, 1 hours:minutes, 2 with seconds,
+// 3 hours:minutes AM or PM, 4 with seconds and AM or PM; -1 is not read.
+same('the formats, in the order step 4 prefers them', FORMATS.map(f => f.py), ['ISO8601', '%m/%d/%Y', '%d/%m/%Y', '%m/%d/%y']);
+same('the time shapes, as ShelterDataPrep patterns', TIMES.map(t => t.py), ['', ' %H:%M', ' %H:%M:%S', ' %I:%M %p', ' %I:%M:%S %p']);
+const [ISO, MDY, DMY, MDY2] = FORMATS;
+const shapes = (v) => FORMATS.map(f => timeShape(v, f));
+same('timeShape, a bare month/day/year', shapes('1/31/2024'), [-1, 0, -1, -1]);
+same('timeShape, a date either order reads', shapes('5/6/2024'), [-1, 0, 0, -1]);
+same('timeShape, a two-digit year', shapes('1/31/24'), [-1, -1, -1, 0]);
+same('timeShape, hours and minutes', shapes('1/31/2024 0:00'), [-1, 1, -1, -1]);
+same('timeShape, hours, minutes, and seconds', shapes('1/31/2024 14:30:59'), [-1, 2, -1, -1]);
+same('timeShape, AM or PM', shapes('1/31/2024 1:05 PM'), [-1, 3, -1, -1]);
+same('timeShape, AM or PM in small letters, with seconds', shapes('1/31/2024 12:00:00 am'), [-1, 4, -1, -1]);
+same('timeShape, a time after a two-digit year', shapes('6/15/98 0:00'), [-1, -1, -1, 1]);
+same('timeShape, day/month/year with a time', shapes('31/1/2024 14:30'), [-1, -1, 1, -1]);
+same('timeShape, two spaces before the time', timeShape('1/31/2024  0:00', MDY), 1);
+same('timeShape, hour 24', timeShape('1/31/2024 24:00', MDY), -1);
+same('timeShape, minute 60', timeShape('1/31/2024 9:60', MDY), -1);
+same('timeShape, hour 13 with PM', timeShape('1/31/2024 13:05 PM', MDY), -1);
+same('timeShape, hour 0 with AM', timeShape('1/31/2024 0:05 AM', MDY), -1);
+same('timeShape, no space before PM', timeShape('1/31/2024 1:05PM', MDY), -1);
+same('timeShape, a T before the time', timeShape('1/31/2024T0:00', MDY), -1);
+same('timeShape, a fraction of a second', timeShape('1/31/2024 0:00:00.000', MDY), -1);
+same('timeShape, text after the date', timeShape('1/31/2024x', MDY), -1);
+same('timeShape, a date that does not exist, with a time', timeShape('2/30/2024 0:00', MDY), -1);
+same('timeShape, year-month-day', shapes('2024-01-31'), [0, -1, -1, -1]);
+same('timeShape, year-month-day with a time has no shape of its own', [timeShape('2024-01-31 14:30', ISO), timeShape('2024-01-31T14:30:00', ISO)], [0, 0]);
+same('timeShape, a year-month-day date that does not exist', timeShape('2024-02-30', ISO), -1);
+same('readDate, the date beside a time', readDate('1/31/2024 14:30', MDY, 1), '2024-01-31');
+same('readDate, a value of another time shape is not read', [readDate('1/31/2024 14:30', MDY, 0), readDate('1/31/2024', MDY, 1)], [null, null]);
+same('readDate, day/month/year', readDate('5/6/2024 7:08', DMY, 1), '2024-06-05');
+same('readDate, month/day/year of the same value', readDate('5/6/2024 7:08', MDY, 1), '2024-05-06');
+same('readDate, a two-digit year before 2000', readDate('6/15/98 0:00', MDY2, 1), '1998-06-15');
+same('readDate, year-month-day with a time', readDate('2024-1-5 08:00', ISO, 0), '2024-01-05');
+
 // ---------- cutShape ----------
 // One intake a day for 200 days from 2020-01-01, each leaving 10 days later.
 const day = (n) => addDay('2020-01-01', n);

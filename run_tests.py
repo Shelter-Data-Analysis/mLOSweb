@@ -20,9 +20,11 @@ ROOT = Path(__file__).resolve().parent
 JSC = "/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Helpers/jsc"
 
 # What the tests call, and what those functions use, in the order the page
-# defines them.  A constant must fit on one line of the page.
+# defines them.  A constant must fit on one line of the page; a list starts
+# with 'const NAME = [' and ends with a line that holds '];' alone.
 CONSTANTS = ["fullYear", "EDGE", "addDay"]
-FUNCTIONS = ["parseCSV", "checksum", "validDate", "cutShape"]
+LISTS = ["FORMATS", "TIMES"]
+FUNCTIONS = ["parseCSV", "checksum", "timeOk", "timeShape", "readDate", "validDate", "cutShape"]
 
 
 def extract(page):
@@ -32,6 +34,11 @@ def extract(page):
         found = re.findall(r"^const {0} = .*;$".format(name), page, re.M)
         if len(found) != 1:
             sys.exit("run_tests.py: expected one line 'const {0} = ...;' in the page, found {1}".format(name, len(found)))
+        parts.append(found[0])
+    for name in LISTS:
+        found = re.findall(r"^const {0} = \[$.*?^\];$".format(name), page, re.M | re.S)
+        if len(found) != 1:
+            sys.exit("run_tests.py: expected one list 'const {0} = [' in the page, found {1}".format(name, len(found)))
         parts.append(found[0])
     for name in FUNCTIONS:
         found = re.findall(r"^function {0}\(.*?^}}$".format(name), page, re.M | re.S)
