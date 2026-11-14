@@ -4,12 +4,19 @@ Each release lists what changed for a visitor to the page, and whether any chang
 
 ## Unreleased
 
-**Numbers.** Two changes can move a number. Step 3 lists columns with up to 100 values, rather than 20, as ways to compare animals, and ticks the size column to start with. For a file whose size column has 21 to 100 values and that has no date of birth, a run with the starting answers compares animals by size, where it compared no animal groups before. The page reads a two-digit year from 69 to 99 as 1969 to 1999, as ShelterDataPrep does, where it read 2069 to 2099. For a file in the month/day/two-digit year format with intake or outcome dates before 2000, the window that step 5 starts with changes, and with it the results of a run that keeps that window. A run with the same answers otherwise gives the same results.
+**Numbers.** Three changes can move a number. Step 3 lists columns with up to 100 values, rather than 20, as ways to compare animals, and ticks the size column to start with. For a file whose size column has 21 to 100 values and that has no date of birth, a run with the starting answers compares animals by size, where it compared no animal groups before. The page reads a two-digit year from 69 to 99 as 1969 to 1999, as ShelterDataPrep does, where it read 2069 to 2099. For a file in the month/day/two-digit year format with intake or outcome dates before 2000, the window that step 5 starts with changes, and with it the results of a run that keeps that window. Step 4 reads dates that carry a time. For a file in which some dates carry a time, the dates read change, and with them the stays prepared; a file whose dates carry no time is read as before. A run with the same answers otherwise gives the same results. ShelterDataPrep moves from 0.5.1 to 0.5.2, which adds a format for each date column; its changelog states that no numbers move for a configuration without one.
 
 **Step 3, choosing the animals.**
 
 - "Ways to compare animals" lists the columns with 2 to 100 values. Step 8 still merges the chosen column's values into at most six groups.
 - The species list and the values of a column of records that are not shelter stays list up to 100 values, most frequent first, for a column with any number of values. A line under the list gives the number of rarer values, their rows, and their share of the rows; they cannot be chosen. When the listed values cover less than 90% of the rows, the page says the column is not well suited for categories.
+
+**Step 4, the date format.**
+
+- A date with a time beside it, such as 1/31/2024 14:30, 1/31/2024 0:00:00, or 1/31/24 2:30 PM, is read, and the time is left out. Before, the page read no such date, and a file written this way could not be prepared. A year-month-day date with a time was already read.
+- The date columns need not be written alike: intake and outcome dates may carry a time beside a date of birth that carries none. The page finds how each column writes its time, and the configuration gives a column that differs its own line under `date_format_override`.
+- The list shows the formats that read at least one date, the one that reads the most first, each with a date from the file as its example. Before, it showed all four formats, with fixed examples.
+- When no format reads any date, the page says so, shows up to three of the file's dates, and prepares nothing.
 
 **Fixes.**
 

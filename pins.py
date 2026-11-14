@@ -14,7 +14,7 @@ webR and the R packages by version.
 # and the downloads are not checked against a digest. The mLOS commit
 # supplies both the R analysis and the deck builder, mlos_review.
 MLOS_REF = "174e5ea7b7aa4fc2b739b0979c54e268c22814f5"  # mLOS v0.5.1
-SDP_REF = "438a6613331617282ddf2702903562d8d17eb281"  # ShelterDataPrep v0.5.1
+SDP_REF = "e98b74ed93bf61a2b349810086a599646de00554"  # ShelterDataPrep v0.5.2
 
 # webR, the build of R for WebAssembly, from its npm package. Its R version
 # decides which directory of repo.r-wasm.org the packages come from.
