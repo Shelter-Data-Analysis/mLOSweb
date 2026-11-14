@@ -34,6 +34,19 @@ Each release lists what changed for a visitor to the page, and whether any chang
 - An age group or a carried column whose name YAML reads as something other than text, such as NO, ON, TRUE, or 1_2, is written to the configuration in quotes, so ShelterDataPrep reads the name as typed. No numbers move for other names.
 - Each run of mLOS frees the memory the run before it held in the tab: its folder of results and the plots and download links made from it. A run that stops frees its own folder. Before, every run's results stayed in memory until the tab closed. No numbers move.
 
+**Wording of steps 4 to 11.** The help text and messages of steps 4 to 11 use plain words, as steps 1 to 3 do. A technical term stays where it names something in the files: in parentheses, or in a section for analysts. No numbers move.
+
+- Step 4 says why the format matters: 3/4/2024 is March 4 in one file and April 3 in another. When no format reads every date, the message says that step 7's table gives the number of dates not read in each date column.
+- Step 5 has a short line under "First day" and under "Stop date" saying what each is. The messages about a file cut by date say first what the file seems to hold or to lack, and name the cut in parentheses.
+- Step 6 says how an animal is placed in an age group, and that a file with no date-of-birth column gets no age groups.
+- Step 7 says what preparing the data does and that the answers are saved in one file, the ShelterDataPrep configuration. The source of the fixed rules is named under "Show the configuration file". When the preparation stops, the message says so before giving ShelterDataPrep's own message.
+- Step 8 calls the values of the outcome and intake columns "outcome types" and "intake types", as step 2 does, where it said "labels". The horizon is labeled "Horizon (days)", and the help text defines it before naming `restricted_stay_cap`. The help text on reference groups says what a reference group is and how to read a hazard ratio. Each menu and number box has a short line under its label.
+- The button of step 8 reads "Run the analysis", where it read "Run mLOS"; the banner above it, the tab's title during a run, and the messages of steps 8, 10, and 11 say "the analysis". When the analysis stops, the message says so before giving mLOS's own message.
+- The checks shown with the results say "the animals in care" where they said "the residents", and name the mLOS User Guide in full.
+- Step 9 says what it makes, a slide deck and a workbook of tables; the deck builder, `mlos_review`, and its command are in a section for analysts that folds open. The line under the tables says what the marks H, L, and F stand for.
+- Step 10 says that the two files at the top of the zip record the answers and can be loaded in step 1 on a later visit.
+- Step 11 is headed "Send your comments and a summary of your study to the mLOS team" and speaks of "the mLOS team" where it said "us" and "we". In the email, the line above `comments:` ends "They help the mLOS team improve the page."; the keys are the same, and `summary_format` stays 4.
+
 **Email to the mLOS team (step 11).** The summary names the version of the page, as the footer does, on an `mlosweb_version:` line that takes the place of `site_commit:`. `summary_format` is 4. No numbers move.
 
 ## 0.2.0 (2026-11-12)

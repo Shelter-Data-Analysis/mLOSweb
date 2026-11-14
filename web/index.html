@@ -40,7 +40,7 @@ select, input[type=file] { max-width:100%; }
 input[type=file] { font-size:15px; }
 input[type=checkbox] { width:16px; height:16px; vertical-align:-2px; }
 .grid2 > * { min-width:0; }
-#mapping { grid-template-columns: fit-content(50%) minmax(0, 1fr); }
+#mapping, .grid2.hinted { grid-template-columns: fit-content(50%) minmax(0, 1fr); }
 .map-hint { display:block; font-size:13px; color:var(--muted); line-height:1.3; }
 [hidden] { display:none !important; }
 button { font:inherit; font-weight:600; padding:9px 18px; border-radius:6px; border:2px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; align-self:flex-start; }
@@ -202,7 +202,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
   <section id="s3" class="locked" inert>
     <span class="step">Step 4</span>
     <h2>Choose the date format</h2>
-    <p class="help">The page tries each format it knows on every date in the three date columns, and lists the ones that read at least one. The right format reads all of them. When two formats both read every date, the file cannot tell them apart: check a date you know. A time written beside a date, such as 1/31/2024 14:30, is read and left out.</p>
+    <p class="help">The same date can be written in more than one way: 3/4/2024 is March 4 in one file and April 3 in another. The page tries each format it knows on every date in the date columns of your file, and lists the formats that read at least one date. The right format reads all of them. When two formats both read every date, the file cannot tell them apart: check a date you know. A time written beside a date, such as 1/31/2024 14:30, is read and left out.</p>
     <div class="scroll"><table id="date-table"></table></div>
     <p class="status" id="date-note"></p>
   </section>
@@ -210,10 +210,10 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
   <section id="s3b" class="locked" inert>
     <span class="step">Step 5</span>
     <h2>Set the study window</h2>
-    <p class="help">The span of time to study, from its first day up to, but not including, its stop date. Every stay that overlaps it is kept, including animals already in care on the first day. The analysis later divides this window into periods.</p>
-    <div class="grid2">
-      <label for="win-start">First day</label><input type="date" id="win-start" value="2017-01-01">
-      <label for="win-end">Stop date</label><input type="date" id="win-end" value="2025-01-01">
+    <p class="help">The span of time to study, from its first day up to, but not including, its stop date. Every stay that overlaps it is kept, including animals already in care on the first day. Step 8 divides this window into periods to compare.</p>
+    <div class="grid2 hinted">
+      <label for="win-start">First day<span class="map-hint">the window starts on this day</span></label><input type="date" id="win-start" value="2017-01-01">
+      <label for="win-end">Stop date<span class="map-hint">the day after the window's last day</span></label><input type="date" id="win-end" value="2025-01-01">
     </div>
     <p class="status" id="win-note"></p>
   </section>
@@ -221,20 +221,22 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
   <section id="s4" class="locked" inert>
     <span class="step">Step 6</span>
     <h2>Define the age groups</h2>
-    <p class="help">Age at intake is computed from the date of birth. Each group runs up to and including its upper age; an animal older than the last group is dropped, and one with no date of birth is counted as _UNKNOWN_.</p>
+    <p class="help">The page works out each animal's age on the day it arrived from its date of birth, and puts the animal in one of these groups. Each group runs up to and including its upper age. An animal older than the last group is left out of the study, and one with no date of birth goes in a group named _UNKNOWN_. With no date-of-birth column chosen in step 2, there are no age groups.</p>
     <table id="age-table">
       <thead><tr><th>Group name</th><th class="num">Up to age (years)</th></tr></thead>
       <tbody></tbody>
     </table>
-    <p class="help">Leave a name blank to drop that row.</p>
+    <p class="help">To remove a group, leave its name blank.</p>
   </section>
 
   <section id="s5" class="locked" inert>
     <span class="step">Step 7</span>
     <h2>Prepare the data</h2>
-    <p class="help">These choices become a ShelterDataPrep configuration file. Its other rules are not asked about: they are taken from ShelterDataPrep's configuration for Mission Viejo and are the same for every file, and "Show the configuration file" lists them. One of them renames size labels written the Mission Viejo way, such as LARGE, and changes nothing in a file that does not use them. Outcome and intake labels pass through unchanged and are classified in step 8.</p>
+    <p class="help">This step applies your answers from steps 2 to 6 to your file and makes the prepared data that step 8 analyzes. A table then shows what was done and the number of rows changed or removed. A few rules are not asked about and are the same for every file. One of them renames size labels written the way one shelter writes them, such as LARGE, and changes nothing in a file that does not use them. Outcome and intake types stay as your file writes them; step 8 asks what each one means. Your answers and the fixed rules are saved in one file (the ShelterDataPrep configuration), which step 1 can load on a later visit.</p>
     <div id="cfg-panel" hidden><p class="status warn" id="cfg-panel-note"></p><ul class="help" id="cfg-changes"></ul><p class="status" id="cfg-window-note"></p></div>
-    <details><summary>Show the configuration file</summary><pre id="config-yaml"></pre></details>
+    <details><summary>Show the configuration file</summary>
+      <p class="help">For analysts: in a configuration this page writes, the rules under "fixed rules" come from ShelterDataPrep's configuration for Mission Viejo (<code>configs/mission_viejo.yaml</code>).</p>
+      <pre id="config-yaml"></pre></details>
     <button id="prep-btn">Prepare the data</button>
     <p class="status" id="s5-status"></p>
     <div id="prep-results"></div>
@@ -247,16 +249,16 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
       <details><summary>Show the settings file as it will run</summary><pre id="set-yaml"></pre></details></div>
     <div id="s6-forms" style="display:flex; flex-direction:column; gap:10px">
     <h3 style="margin:4px 0 0">Classify the outcomes</h3>
-    <p class="help">Each outcome label in the prepared data, with the number of stays that end in it. Choose what each one means. Guesses are filled in where the label is a common one; every label needs a choice before the analysis can run.</p>
+    <p class="help">Each outcome type in the prepared data, with the number of stays that end in it. Choose what each one means. The page fills in a guess where the type is a common one; check each guess. Every type needs a choice before the analysis can run.</p>
     <div class="scroll"><table id="outcome-table"></table></div>
     <p class="status" id="outcome-note"></p>
     <h3 style="margin:8px 0 0">Group the intake types</h3>
-    <p class="help">Each intake label in the prepared data, with its number of stays. Give each one a group name; labels with the same name are combined into one group, and the analysis compares the groups. Up to six groups. Tick "Leave out" to study only the other intakes.</p>
+    <p class="help">Each intake type in the prepared data, with its number of stays. Give each one a group name; types with the same group name are combined into one group, and the analysis compares the groups. Up to six groups. Tick "Leave out" for a type to leave its stays out of the analysis.</p>
     <div class="scroll"><table id="intake-table"></table></div>
     <datalist id="intake-groups"></datalist>
     <p class="status" id="intake-note"></p>
     <h3 style="margin:8px 0 0">Set the periods</h3>
-    <p class="help">mLOS compares periods within the study window. Add up to three dividing dates to split it into as many as four periods, and name each one. Choose the dates before looking at the results: at real events where there are any (a new program, a policy change), otherwise at calendar years or half-years. Aim for at least 100 outcomes in each period.</p>
+    <p class="help">The analysis compares periods of the study window, to show whether stays grew longer or shorter. Add up to three dividing dates to split it into as many as four periods, and name each one. Choose the dates before looking at the results: at real events where there are any (a new program, a policy change), otherwise at calendar years or half-years. Aim for at least 100 outcomes in each period.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
       <span class="help">Dividing dates (each starts a new period):</span>
       <input type="date" id="div-0" aria-label="Dividing date 1">
@@ -266,31 +268,31 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <div class="scroll"><table id="period-table"></table></div>
     <p class="status" id="period-note"></p>
     <h3 style="margin:8px 0 0">Group the animals</h3>
-    <p class="help">Choose one of the columns carried from step 3 to compare animals by. Each of its values, with its number of stays, gets a group name; values with the same name are combined into one group. Up to six groups. Tick "Leave out" to study only the other animals.</p>
-    <div class="grid2">
-      <label for="group-by">Compare animals by</label>
+    <p class="help">Choose one of the columns ticked in step 3 to compare animals by. Each of its values is listed with its number of stays. Give each one a group name; values with the same group name are combined into one group. Up to six groups. Tick "Leave out" for a value to leave its stays out of the analysis.</p>
+    <div class="grid2 hinted">
+      <label for="group-by">Compare animals by<span class="map-hint">a column ticked in step 3</span></label>
       <select id="group-by"></select>
     </div>
     <div class="scroll"><table id="group-table"></table></div>
     <datalist id="animal-groups"></datalist>
     <p class="status" id="group-note"></p>
     <h3 style="margin:8px 0 0">Set the analysis horizon</h3>
-    <p class="help">The longest stay the analysis follows (<code>restricted_stay_cap</code>). A stay that reaches it counts as in care up to that day, and nothing after it is used. Too low, and real long stays are cut short; too high, and a few mistaken records can dominate the averages. Start at 365 days, then check the fraction still in care at the horizon, which the results report after the run.</p>
-    <div class="grid2">
-      <label for="cap">Longest stay followed (days)</label><input type="number" id="cap" value="365" min="1" step="1">
-      <label for="plot-cap">Plots show days up to</label><input type="number" id="plot-cap" value="58" min="1" step="1">
+    <p class="help">The horizon is the longest stay the analysis follows, in days (in the settings file, <code>restricted_stay_cap</code>). A stay that reaches it counts as in care up to that day, and nothing after that day is used. Too low, and real long stays are cut short; too high, and a few mistaken records can dominate the averages. Start at 365 days. After the run, the checks shown with the results give the share of animals still in care at the horizon. The plots can stop earlier than the horizon, to show the first weeks in more detail.</p>
+    <div class="grid2 hinted">
+      <label for="cap">Horizon (days)<span class="map-hint">the longest stay followed</span></label><input type="number" id="cap" value="365" min="1" step="1">
+      <label for="plot-cap">Plots show days up to<span class="map-hint">no more than the horizon</span></label><input type="number" id="plot-cap" value="58" min="1" step="1">
     </div>
     <p class="status" id="cap-note"></p>
     <h3 style="margin:8px 0 0">Choose the reference groups</h3>
-    <p class="help">Each hazard ratio compares a group with its reference. The largest group is usually the right one; choose another large group if the ratios come out extreme or their intervals very wide.</p>
-    <div class="grid2">
-      <label for="ref-intake">Intake groups compared with</label><select id="ref-intake"></select>
-      <label for="ref-group">Animal groups compared with</label><select id="ref-group"></select>
+    <p class="help">A reference group is the group that the others are compared with: for example, whether owner surrenders leave sooner or later than strays. Each comparison is a ratio (a hazard ratio in the tables). Above 1, the animals of a group leave faster than those of the reference group, so their stays are shorter; below 1, they leave more slowly. The largest group is usually the right reference group; choose another large group if the ratios come out extreme or their confidence intervals, the ranges of uncertainty around them, very wide.</p>
+    <div class="grid2 hinted">
+      <label for="ref-intake">Intake groups compared with<span class="map-hint">the reference group for intake</span></label><select id="ref-intake"></select>
+      <label for="ref-group">Animal groups compared with<span class="map-hint">the reference group for animals</span></label><select id="ref-group"></select>
     </div>
     </div>
     <div class="stay" id="run-stay" role="status" aria-live="assertive"><span class="icon" aria-hidden="true" id="run-stay-icon">!</span>
-      <div><strong id="run-stay-head">Stay on this tab while mLOS runs.</strong><span id="run-stay-text">Do not switch to another tab, window, or program until the results appear. Browsers slow down, and can pause, a tab that is out of sight.</span></div></div>
-    <button id="run-btn">Run mLOS</button>
+      <div><strong id="run-stay-head">Stay on this tab while the analysis runs.</strong><span id="run-stay-text">Do not switch to another tab, window, or program until the results appear. Browsers slow down, and can pause, a tab that is out of sight.</span></div></div>
+    <button id="run-btn">Run the analysis</button>
     <p class="status" id="s6-status"></p>
     <div id="run-results"></div>
   </section>
@@ -298,7 +300,10 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
   <section id="s7" class="locked" inert>
     <span class="step">Step 9</span>
     <h2>Build the slide deck and its tables</h2>
-    <p class="help">This step runs a second program, the deck builder mlos_review, which comes with mLOS and reads the analysis results. It writes a PowerPoint deck of findings and a workbook of the tables the deck draws on. On your own computer the same builder runs as <code>python3 -m mlos_review.deck</code>.</p>
+    <p class="help">This step turns the results into a PowerPoint slide deck of the findings and an Excel workbook of the tables the slides draw on. The page then shows the tables you pick.</p>
+    <details class="analysts"><summary>For analysts: the program behind this step</summary>
+    <p class="help">The deck builder, mlos_review, comes with mLOS and reads the results of the analysis. This page runs it with its default settings. On your own computer the same builder runs as <code>python3 -m mlos_review.deck</code>.</p>
+    </details>
     <label class="help"><input type="checkbox" id="tables-only"> Tables only: skip the slides (faster, and a fallback if building the slides fails)</label>
     <button id="deck-btn">Build the deck</button>
     <p class="status" id="s7-status"></p>
@@ -308,21 +313,21 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
   <section id="s9" class="locked" inert>
     <span class="step">Step 10</span>
     <h2>Save everything</h2>
-    <p class="help">One zip file holding every file this page made: the prepared data, the mLOS results, and the slide deck and its tables if they were built. The ShelterDataPrep configuration and the mLOS settings file sit at the top of the zip, ready to reuse. Nothing is kept once this tab is closed or reloaded.</p>
+    <p class="help">One zip file holding every file this page made: the prepared data, the results of the analysis, and the slide deck and its tables if they were built. The two files that record your answers (the ShelterDataPrep configuration and the mLOS settings file) sit at the top of the zip; step 1 can load them on a later visit to give the same answers again. The page keeps nothing once this tab is closed or reloaded.</p>
     <ul class="save-list" id="save-list"></ul>
-    <p class="status warn" id="save-stale" hidden>A choice has changed since the last run. The zip holds that run's files, which do not reflect the change; run mLOS again to include it.</p>
+    <p class="status warn" id="save-stale" hidden>A choice has changed since the last run. The zip holds that run's files, which do not reflect the change; run the analysis again to include it.</p>
     <button class="save-btn" id="save-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download everything</button>
     <p class="status" id="save-status"></p>
   </section>
 
   <section id="s8">
     <span class="step">Step 11 (optional)</span>
-    <h2>Send us your comments and some basic stats on your study</h2>
-    <p class="help">Help us improve the software by sharing some basic stats on your study. We do not track your data or your usage: this page sends nothing itself. The button opens a new email in your email program, addressed to us, holding the summary below: how the page was used and how your study was set up (counts, dates, choices, and group labels). It holds no results, no record of any animal, and no file. Delete any line you prefer not to share, and send it only if you wish. We may write back to ask whether you would share the data.</p>
-    <p class="help"><strong>Comments are welcome at any point, even if you stopped partway or could not get the page to work.</strong> Until mLOS has run, the email holds your comments and what the page knows so far: the versions of this page and the programs, the date, and how far you got; once a file is loaded, how it was loaded, the species, and the file's numbers of rows and columns; and once the data is prepared, the number of prepared rows.</p>
+    <h2>Send your comments and a summary of your study to the mLOS team</h2>
+    <p class="help">Comments and summaries from shelters help the mLOS team improve this page. The page does not track your records or how you use it, and it sends nothing itself. The button opens a new email in your email program, addressed to the team, holding the summary below: how the page was used and how your study was set up (counts, dates, choices, and group names). It holds no results, no record of any animal, and no file. Delete any line you prefer not to share; whether to send the email is your choice. The team may write back to ask whether you would share the data.</p>
+    <p class="help"><strong>Comments are welcome at any point, even if you stopped partway or could not get the page to work.</strong> Until the analysis has run, the email holds your comments and what the page knows so far: the versions of this page and its programs, the date, and how far you got; once a file is loaded, how it was loaded, the species, and the file's numbers of rows and columns; and once the data is prepared, the number of prepared rows.</p>
     <div class="plea">
-      <label for="share-comments"><strong>Please tell us what you think.</strong> Your comments are the most useful part of this email, and the main way we learn what to fix and what to add. What worked? What was confusing, slow, or wrong? What did you wish the page did? A single sentence helps; a few minutes of candid comments helps a great deal. They go on the <code>comments:</code> line at the end of the email, and you can also add to them in the email itself.</label>
-      <textarea id="share-comments" rows="5" placeholder="Comments: what worked, what did not, and what would make this tool more useful to your shelter"></textarea>
+      <label for="share-comments"><strong>Please say what you think.</strong> Your comments are the most useful part of this email, and the main way the team learns what to fix and what to add. What worked? What was confusing, slow, or wrong? What did you wish the page did? A single sentence helps; a few minutes of candid comments helps a great deal. They go on the <code>comments:</code> line at the end of the email, and you can also add to them in the email itself.</label>
+      <textarea id="share-comments" rows="5" placeholder="Comments: what worked, what did not, and what would make this page more useful to your shelter"></textarea>
     </div>
     <pre id="share-preview"></pre>
     <div class="file-row"><button id="share-btn" class="secondary">Write the email</button><button id="share-copy" class="secondary">Copy the summary</button></div>
@@ -1260,7 +1265,7 @@ function buildDates() {
   if (!total) { note.className = 'status'; note.textContent = cols.length ? 'The date columns chosen in step 2 hold no values.' : ''; }
   else if (datesUnread) { note.className = 'status bad'; note.textContent = `None of the date formats this page knows reads the dates in your file, such as ${unread.map(v => `"${v}"`).join(', ')}. The page cannot prepare this file as it is.`; }
   else if (full.length > 1) { note.className = 'status warn'; note.textContent = 'Every date reads as ' + full.map(f => f.label.toLowerCase()).join(' and as ') + '. Check one date you know before going on.' + timeNote; }
-  else if (counts[chosen] < total) { note.className = 'status warn'; note.textContent = 'No format reads every date. Dates that are not read are treated as missing, and ShelterDataPrep counts them.' + timeNote; }
+  else if (counts[chosen] < total) { note.className = 'status warn'; note.textContent = 'No format reads every date. A date that is not read counts as missing, and the table in step 7 gives the number of dates not read in each date column.' + timeNote; }
   else { note.className = 'status ok'; note.textContent = 'One format reads every date: ' + FORMATS[chosen].label.toLowerCase() + '.' + timeNote; }
   window.demo.dateCounts = Object.fromEntries(FORMATS.map((f, n) => [f.py, counts[n]]));
   window.demo.dateTotal = total;
@@ -1438,14 +1443,14 @@ function cutGuess(facts) {
            end: sh.open <= sh.stays / 1000 ? 'outcome' : 'intake' };
 }
 function guessText(g) {
-  const kind = g.start === 'outcome' && g.end === 'outcome' ? 'cut by outcome date: it seems to hold only the animals that left between its first and last outcomes'
-    : g.end === 'outcome' ? 'cut by both intake and outcome date: it seems to hold only the animals admitted in its date range that also left in it'
-    : g.start === 'outcome' ? 'cut by outcome date at its start: it seems to hold the animals that left on or after its first outcome, and those still in care'
-    : 'cut by intake date, or not cut: it seems to hold every animal admitted in its date range, including those still in care';
+  const kind = g.start === 'outcome' && g.end === 'outcome' ? 'the animals that left between its first and last outcome dates, and no others (a file cut by outcome date)'
+    : g.end === 'outcome' ? 'the animals that arrived in its date range and also left in it, and no others (a file cut by both intake and outcome date)'
+    : g.start === 'outcome' ? 'the animals that left on or after its first outcome date, and those still in care (a file cut by outcome date at its start)'
+    : 'every animal that arrived in its date range, including those still in care (a file cut by intake date, or not cut)';
   const share = (x) => `${Math.round(100 * x)}%`;
   const start = `In its first ${EDGE} days it has ${g.inEdge.toLocaleString()} intake${g.inEdge === 1 ? '' : 's'} from ${g.a}, ${share(g.inPace)} of its usual pace, and ${g.outEdge.toLocaleString()} outcome${g.outEdge === 1 ? '' : 's'} from ${g.b}, ${share(g.outPace)} of theirs`;
   const end = g.open ? `${g.open.toLocaleString()} stay${g.open === 1 ? '' : 's'} with no outcome date` : 'no stay without an outcome date';
-  return `Your file looks ${kind}. ${start}; it has ${end}.` + (ownConfig ? '' : ' The default window assumes this.');
+  return `Your file seems to hold ${kind}. ${start}; it has ${end}.` + (ownConfig ? '' : ' The default window assumes this.');
 }
 // The analysis follows a stay up to the cap, so an export cut by intake date
 // misses nothing once the window starts a cap's length after its first intake.
@@ -1512,11 +1517,11 @@ function windowNote() {
     if (guess) lines.push(guessText(guess));
     const lead = windowLead(facts), fo = guess && guess.b;
     const byIntake = lead && lead.days < lead.cap, byOutcome = fo && s < fo;
-    if (byIntake) warnings.push(`The window starts ${lead.days} days after the file's first intake, fewer than the ${lead.cap}-day horizon ${ownSettings ? 'in ' + ownSettings.name : 'set in step 8'}. If the file is ${guess && guess.start === 'outcome' ? 'also ' : ''}cut by intake date, holding only animals admitted from ${lead.first} on, animals admitted earlier and still in care on ${s} are missing; the results after the run estimate how many. Starting on or after ${lead.safeStart} avoids the question.`);
-    if (byOutcome) warnings.push(`The file records no outcome before ${fo}, after the window's first day. If it is cut by outcome date, holding only animals that left on or after ${fo}, the animals that left between ${s} and then are missing, and the window's first periods hold only the longer stays. Starting on or after ${fo} avoids the question.`);
-    if (byIntake && byOutcome) warnings.push(`If it is cut by both, start on or after the later of the two, ${lead.safeStart > fo ? lead.safeStart : fo}.`);
+    if (byIntake) warnings.push(`The window starts ${lead.days} days after the file's first intake, fewer than the ${lead.cap}-day horizon ${ownSettings ? 'in ' + ownSettings.name : 'set in step 8'}. If the file ${guess && guess.start === 'outcome' ? 'also ' : ''}holds no animal that arrived before ${lead.first} (a file cut by intake date), the animals that arrived earlier and were still in care on ${s} are missing; the checks shown with the results estimate how many. A first day on or after ${lead.safeStart} avoids the question.`);
+    if (byOutcome) warnings.push(`The file records no outcome before ${fo}, after the window's first day. If it holds no animal that left before ${fo} (a file cut by outcome date), the animals that left between ${s} and ${fo} are missing, and the start of the window holds the longer stays alone. A first day on or after ${fo} avoids the question.`);
+    if (byIntake && byOutcome) warnings.push(`If both hold, choose a first day on or after the later of the two, ${lead.safeStart > fo ? lead.safeStart : fo}.`);
     const os = outcomeStop(facts);
-    if (guess && guess.end === 'outcome' && os && e > os) warnings.push(`No more than one stay in a thousand in the file lacks an outcome date, so it seems to hold no animal still in care. If it is cut by outcome date, holding only animals that left by ${guess.lastOut}, the animals in care on that day are missing, and stays that begin near the stop date look shorter than they were. A stop date on or before ${os}, ${capValue()} days before the day after the last outcome, leaves only stays longer than the horizon missing.`);
+    if (guess && guess.end === 'outcome' && os && e > os) warnings.push(`No more than one stay in a thousand in the file lacks an outcome date, so it seems to hold no animal still in care. If it holds no animal that left after ${guess.lastOut} (a file cut by outcome date), the animals in care on that day are missing, and stays that begin near the stop date look shorter than they were. With a stop date on or before ${os}, ${capValue()} days before the day after the last outcome, the stays still missing are those longer than the horizon.`);
     if (!ownConfig) {
       const i = header.indexOf(mapping().intake_date);
       const after = rows.map(r => isoOf(r[i], 'intake_date')).filter(x => x && x >= e).length;
@@ -1614,7 +1619,7 @@ buf.getvalue()`);
     window.demo.prepReport = report;
   } catch (e) {
     st.className = 'status bad lines';
-    st.textContent = 'ShelterDataPrep stopped: ' + prepError(e);
+    st.textContent = 'The preparation stopped. ShelterDataPrep, the program that prepares the data, reports: ' + prepError(e);
     window.demo.errors.push(String(e));
     prepStopped = true;
   }
@@ -1681,7 +1686,7 @@ function showPrep(stats, preparedText, statsText) {
   const rowsP = parseCSV(preparedText);
   const wrap = $('prep-results');
   const num = (v) => v === '' ? '' : (+v).toLocaleString();
-  let html = '<caption class="help" style="text-align:left">What each step did. Indented lines count the rows matched by each value the step names.</caption>' +
+  let html = '<caption class="help" style="text-align:left">What the preparation did, in order. The step numbers are its own, not those of this page. Indented lines count the rows matched by each value a rule names.</caption>' +
     '<thead><tr><th>Step</th><th>Action</th><th>Rule</th><th class="num">Rows in</th><th class="num">Changed or removed</th><th class="num">Rows out</th></tr></thead><tbody>';
   for (const r of stage) {
     const step = col(r, 'step'), action = col(r, 'action');
@@ -1745,7 +1750,7 @@ function guessOutcome(label) {
 function buildOutcomes() {
   const counts = countBy(parseCSV(prepared), 'outcome_type');
   const t = $('outcome-table');
-  t.innerHTML = '<thead><tr><th>Outcome label</th><th class="num">Stays</th><th>Means</th></tr></thead>';
+  t.innerHTML = '<thead><tr><th>Outcome type</th><th class="num">Stays</th><th>Means</th></tr></thead>';
   const body = document.createElement('tbody');
   counts.forEach(([label, n], k) => {
     const tr = document.createElement('tr');
@@ -1775,7 +1780,7 @@ function outcomeCheck() {
   const problems = [];
   const open = labels.filter(l => !outcomeChoice[l]);
   if (open.length) problems.push('choose a meaning for ' + open.map(l => l === '_UNKNOWN_' ? '(blank)' : l).join(', '));
-  if (!labels.some(l => ['L', 'T', 'N'].includes(outcomeChoice[l]))) problems.push('at least one label must be an outcome (community live, other live, or non-live)');
+  if (!labels.some(l => ['L', 'T', 'N'].includes(outcomeChoice[l]))) problems.push('at least one type must be an outcome (community live, other live, or non-live)');
   const note = $('outcome-note');
   note.className = problems.length ? 'status warn' : 'status';
   note.textContent = problems.length ? 'Before running: ' + problems.join('; ') + '.' : '';
@@ -1816,7 +1821,7 @@ function buildIntakes() {
     intakeChoice[label] = { group, leaveOut: false };
   });
   const t = $('intake-table');
-  t.innerHTML = '<thead><tr><th>Intake label</th><th class="num">Stays</th><th>Group</th><th>Leave out</th></tr></thead>';
+  t.innerHTML = '<thead><tr><th>Intake type</th><th class="num">Stays</th><th>Group</th><th>Leave out</th></tr></thead>';
   const body = document.createElement('tbody');
   counts.forEach(([label, n], k) => {
     const c = intakeChoice[label];
@@ -1848,7 +1853,7 @@ function intakeCheck() {
   const unnamed = counts.filter(([l]) => !intakeChoice[l].leaveOut && !intakeChoice[l].group);
   if (unnamed.length) problems.push('give a group name to ' + unnamed.map(([l]) => shownLabel(l)).join(', '));
   if (names.some(n => /[,=]/.test(n))) problems.push('a group name cannot contain a comma or an equals sign');
-  if (!groups.length && counts.length) problems.push('keep at least one intake label');
+  if (!groups.length && counts.length) problems.push('keep at least one intake type');
   if (groups.length > INTAKE_CAP) problems.push(`combine the ${groups.length} groups into at most ${INTAKE_CAP}`);
   const clash = counts.filter(([l]) => intakeChoice[l].leaveOut && names.includes(l));
   if (clash.length) problems.push(clash.map(([l]) => `${shownLabel(l)} is left out but is also the name of a kept group; rename that group`).join('; '));
@@ -1950,7 +1955,7 @@ function buildGroupBy() {
   const sel = $('group-by'), keep = wantGroup != null ? wantGroup : sel.options.length ? sel.value : null;
   wantGroup = null;
   sel.innerHTML = cols.map(c => `<option value="${esc(c)}">${esc(GROUP_LABELS[c] || c)}</option>`).join('') +
-    `<option value="">${cols.length ? '(no comparison of animal groups)' : '(nothing: step 3 carries no column to compare animals by)'}</option>`;
+    `<option value="">${cols.length ? '(no comparison of animal groups)' : '(nothing: no column is ticked in step 3)'}</option>`;
   sel.value = cols.includes(keep) || keep === '' ? keep : cols.includes('age_group') ? 'age_group' : (cols[0] || '');
   buildGroups();
 }
@@ -2019,9 +2024,9 @@ const capValue = () => ownSettings ? ownSettings.cap : (/^\d+$/.test($('cap').va
 function horizonCheck() {
   const problems = [], cap = capValue(), plotCap = $('plot-cap').value;
   if (!ownSettings) {
-    if (!cap) problems.push('the longest stay followed must be a whole number of days');
-    if (!(/^\d+$/.test(plotCap) && +plotCap > 0)) problems.push('the plotted days must be a whole number');
-    else if (cap && +plotCap > cap) problems.push('the plots cannot show more days than the analysis follows');
+    if (!cap) problems.push('the horizon must be a whole number of days');
+    if (!(/^\d+$/.test(plotCap) && +plotCap > 0)) problems.push('the days the plots show must be a whole number');
+    else if (cap && +plotCap > cap) problems.push('the plots cannot show more days than the horizon');
   }
   const note = $('cap-note');
   note.className = problems.length ? 'status bad' : 'status';
@@ -2058,11 +2063,11 @@ function referencesYaml() {
 // and the tab's title say so, and the banner keeps saying so after the user
 // comes back, until the run ends.
 const STAY = {
-  idle: ['', 'Stay on this tab while mLOS runs.', 'Do not switch to another tab, window, or program until the results appear. Browsers slow down, and can pause, a tab that is out of sight.'],
-  running: ['running', 'mLOS is running. Stay on this tab.', 'Switching to another tab, window, or program can slow the run down or pause it. The results appear below when it finishes.'],
-  done: ['done', 'mLOS has finished.', 'The results are below. You can switch tabs now.'],
-  stale: ['stale', 'The results below are out of date.', 'A choice above has changed since they were made. Run mLOS again to bring them up to date.'],
-  left: ['left', 'You left this tab while mLOS was running.', 'The run may have slowed down while the tab was out of sight. It goes on now: stay on this tab until the results appear.'],
+  idle: ['', 'Stay on this tab while the analysis runs.', 'Do not switch to another tab, window, or program until the results appear. Browsers slow down, and can pause, a tab that is out of sight.'],
+  running: ['running', 'The analysis is running. Stay on this tab.', 'Switching to another tab, window, or program can slow the run down or pause it. The results appear below when it finishes.'],
+  done: ['done', 'The analysis has finished.', 'The results are below. You can switch tabs now.'],
+  stale: ['stale', 'The results below are out of date.', 'A choice above has changed since they were made. Run the analysis again to bring them up to date.'],
+  left: ['left', 'You left this tab while the analysis was running.', 'The run may have slowed down while the tab was out of sight. It goes on now: stay on this tab until the results appear.'],
 };
 const pageTitle = document.title;
 let running = false, leftDuringRun = false, shownState = 'idle';
@@ -2088,12 +2093,12 @@ function stayBanner(state) {
 function setRunning(on, state) {
   running = on; leftDuringRun = false;
   stayBanner(on ? 'running' : state || 'idle');
-  document.title = on ? 'Running mLOS: stay on this tab' : pageTitle;
+  document.title = on ? 'Running the analysis: stay on this tab' : pageTitle;
 }
 document.addEventListener('visibilitychange', () => {
   if (!running) return;
-  if (document.hidden) { leftDuringRun = true; document.title = 'Come back: mLOS is running'; stayBanner('left'); }
-  else document.title = 'Running mLOS: stay on this tab';
+  if (document.hidden) { leftDuringRun = true; document.title = 'Come back: the analysis is running'; stayBanner('left'); }
+  else document.title = 'Running the analysis: stay on this tab';
 });
 const GROUP_CAP = 6;
 let lastRunCap = null, lastRunLead = null;
@@ -2119,7 +2124,7 @@ const runUrl = (bytes, type) => { const u = URL.createObjectURL(new Blob([bytes]
 $('run-btn').onclick = async () => {
   const st = $('s6-status');
   const group = $('group-by').value;
-  if (!ownSettings && outcomeCheck().length) { st.className = 'status bad'; st.textContent = 'Classify every outcome label first.'; return; }
+  if (!ownSettings && outcomeCheck().length) { st.className = 'status bad'; st.textContent = 'Choose a meaning for every outcome type first.'; return; }
   if (!ownSettings && intakeCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the intake groups first.'; return; }
   if (!ownSettings && groupCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the animal groups first.'; return; }
   if (!ownSettings && periodCheck().length) { st.className = 'status bad'; st.textContent = 'Fix the periods first.'; return; }
@@ -2128,7 +2133,7 @@ $('run-btn').onclick = async () => {
   // loading another file, while mLOS runs changes neither what the results
   // are saved with nor whether they count as current.
   const from = { data: prepared, config: preparedConfig, files: prepFiles, name: exportName };
-  await startBusy($('run-btn'), 'Running mLOS...');
+  await startBusy($('run-btn'), 'Running the analysis...');
   setRunning(true);
   // The earlier run's results are out of sight while mLOS runs, and are
   // replaced when it finishes (showRun). A run that stops brings them back,
@@ -2145,11 +2150,11 @@ $('run-btn').onclick = async () => {
     await rReady;
     template = await (await get('mlos_settings_template.yaml')).text();
   } catch (e) {
-    st.className = 'status bad'; st.textContent = 'mLOS cannot run: ' + (e.message || e) + '.' + RELOAD;
+    st.className = 'status bad'; st.textContent = 'The analysis cannot run: ' + (e.message || e) + '.' + RELOAD;
     stop();
     return;
   }
-  st.textContent = 'Running mLOS...';
+  st.textContent = 'Running the analysis...';
   const out = '/out_' + (++runNo);
   const facts = { ...preparedFacts, settings_from: ownSettings ? 'uploaded file' : 'page questions' };
   const settingsText = ownSettings ? ownSettings.effective : withAnswers(
@@ -2176,19 +2181,19 @@ $('run-btn').onclick = async () => {
         c(r$n_periods, r$n_intake_types, r$n_animal_groups)
       })`)).toArray();
     } catch (e) {
-      st.className = 'status bad'; st.textContent = 'mLOS stopped: ' + rError(e);
+      st.className = 'status bad'; st.textContent = 'The analysis stopped. mLOS, the program that runs it, reports: ' + rError(e);
       window.demo.errors.push(String(e)); stop(); runStoppedShare();
       return;
     } finally { sh.purge(); }
     const over = [[n[0], PERIOD_CAP, 'periods'], [n[1], INTAKE_CAP, 'intake groups'], [n[2], GROUP_CAP, 'animal groups']].filter(([k, cap]) => k > cap);
     if (over.length) {
       st.className = 'status bad';
-      st.textContent = `This tool compares at most ${PERIOD_CAP} periods, ${INTAKE_CAP} intake groups, and ${GROUP_CAP} animal groups, and ${ownSettings.name} gives ` +
+      st.textContent = `This page compares at most ${PERIOD_CAP} periods, ${INTAKE_CAP} intake groups, and ${GROUP_CAP} animal groups, and ${ownSettings.name} gives ` +
         over.map(([k, , what]) => `${k} ${what}`).join(' and ') + '. Merge some of them in the file, with its maps or its period dates.';
       window.demo.capRefusal = st.textContent; stop(); runStoppedShare();
       return;
     }
-    st.textContent = 'Running mLOS...';
+    st.textContent = 'Running the analysis...';
   }
   const t0 = performance.now();
   try {
@@ -2210,7 +2215,7 @@ $('run-btn').onclick = async () => {
     await showRun(out, from);
   } catch (e) {
     st.className = 'status bad';
-    st.textContent = 'mLOS stopped: ' + rError(e);
+    st.textContent = 'The analysis stopped. mLOS, the program that runs it, reports: ' + rError(e);
     runStopped = true;
     window.demo.errors.push(String(e));
     stop();
@@ -2240,18 +2245,18 @@ async function runChecks(out, cap, lead) {
   const high = atCap.filter(([, v]) => v >= 0.005), top = atCap.reduce((a, b) => (b[1] > a[1] ? b : a), ['', 0]);
   items.push(high.length ?
     { level: high.some(([, v]) => v >= 0.01) ? 'bad' : 'warn', text: `Still in care at the ${cap}-day horizon: ` + high.map(([c, v]) => `${c} ${pct(v)}`).join(', ') +
-      ' of arrivals. The User Guide treats 0.5% as worth attention and 1% as a reason for a second run at a different horizon: animals that stay that long are a much larger share of the residents, so the census and tenure figures are low. If the long stays are real, a longer horizon measures them; if they are mistaken records, a shorter one keeps them from dominating.' } :
-    { level: 'ok', text: `At most ${pct(top[1])} of any group's arrivals (${top[0]}) are still in care at the ${cap}-day horizon, under the 0.5% the User Guide treats as worth attention.` });
+      ' of arrivals. The mLOS User Guide treats 0.5% as worth attention and 1% as a reason for a second run at a different horizon: animals that stay that long are a much larger share of the animals in care on a given day than of the arrivals, so the figures on the animals in care come out low. If the long stays are real, a longer horizon measures them; if they are mistaken records, a shorter one keeps them from dominating.' } :
+    { level: 'ok', text: `At most ${pct(top[1])} of any group's arrivals (${top[0]}) are still in care at the ${cap}-day horizon, under the 0.5% the mLOS User Guide treats as worth attention.` });
   const few = strata.filter(k => k !== 'all').flatMap(k => resultRow(res.strata[k].outcomes, 'completed_outcomes_total').map(([c, v]) => [shownLabel(c), v]))
     .filter(([, v]) => typeof v === 'number' && v < 100);
-  if (few.length) items.push({ level: 'warn', text: 'Fewer than the 100 outcomes the User Guide recommends per group: ' + few.map(([c, v]) => `${c} (${v})`).join(', ') + '. Their curves and ratios are imprecise; longer periods or merged groups give more.' });
+  if (few.length) items.push({ level: 'warn', text: 'Fewer than the 100 outcomes the mLOS User Guide recommends for each group: ' + few.map(([c, v]) => `${c} (${v})`).join(', ') + '. Their curves and ratios are imprecise; longer periods or merged groups give more.' });
   if (lead && lead.days < lead.cap) {
     const tenure = parseCSV(new TextDecoder().decode(await webR.FS.readFile(out + '/km_in_care_tenure_unified.csv')));
     const at = tenure.slice(1).filter(r => /^\d+$/.test(r[0]) && +r[0] <= lead.days).pop();
-    if (at) items.push({ level: 'warn', text: `The window starts ${lead.days} days after the file's first intake. In a shelter in its usual state, ${pct(+at[1])} of the residents on any day have been in care longer than that, so if the file is cut by intake date, holding only animals admitted from ${lead.first} on, about that share of the residents on the window's first day are missing from it. A shelter emptied or newly opened just before the window loses less.` });
+    if (at) items.push({ level: 'warn', text: `The window starts ${lead.days} days after the file's first intake. In a shelter in its usual state, ${pct(+at[1])} of the animals in care on any day have been in care longer than that, so if the file holds no animal that arrived before ${lead.first} (a file cut by intake date), about that share of the animals in care on the window's first day are missing from it. A shelter emptied or newly opened just before the window loses less.` });
   }
   const led = res.data_preparation.ledger.columns, j = led.name.indexOf('overlapping_stays');
-  if (j >= 0 && led.rows_affected[j] > 0) items.push({ level: 'warn', text: `${led.rows_affected[j].toLocaleString()} stays overlapped another stay of the same animal; the shorter of each pair was dropped (discard_overlapping_rows).` });
+  if (j >= 0 && led.rows_affected[j] > 0) items.push({ level: 'warn', text: `${led.rows_affected[j].toLocaleString()} stays overlapped another stay of the same animal; the shorter of each pair was left out (in the settings file, discard_overlapping_rows).` });
   const box = document.createElement('div');
   box.innerHTML = '<h3 style="margin:8px 0 4px">Checks on these results</h3>';
   for (const it of items) { const q = document.createElement('p'); q.className = 'status ' + it.level; q.textContent = it.text; box.append(q); }
@@ -2327,7 +2332,7 @@ async function showRun(out, from) {
   const wrap = $('run-results');
   const intro = document.createElement('p'); intro.className = 'help';
   const withCsv = pngs.filter(n => csvOf[n]).length;
-  intro.append(`${names.length} files were written: ${pngs.length} plots, ${withCsv === pngs.length ? 'each with a CSV of its numbers' : `${withCsv} of them with a CSV of their numbers`}, plus the Excel workbook, results.json, and the log. ` +
+  intro.append(`${names.length} files were written: ${pngs.length} plots, ${withCsv === pngs.length ? 'each with a CSV of its numbers' : `${withCsv} of them with a CSV of their numbers`}, plus the Excel workbook, the log, and a file of the results for programs to read (results.json). ` +
                'Each plot shown below has links to download it and its CSV. ' +
                'The results zip holds all of them, with the ShelterDataPrep configuration and the mLOS settings file this run was made from.');
   const links = downloadLine('run', [
@@ -2423,7 +2428,7 @@ function saveRefresh() {
   lock('s9', !set.prep && !set.run);
   const items = [
     [!!set.prep, 'The prepared data, the full step table, and the ShelterDataPrep configuration', 'from step 7'],
-    [!!set.run, set.run ? `The mLOS results, ${set.run.names.length} files, with the settings file` : 'The mLOS results and settings file', 'from step 8'],
+    [!!set.run, set.run ? `The results of the analysis, ${set.run.names.length} files, with the mLOS settings file` : 'The results of the analysis and the mLOS settings file', 'from step 8'],
     [!!set.deck, set.deck ? (set.deck['mlos_deck.pptx'] ? 'The slide deck and its tables workbook' : 'The tables workbook') : 'The slide deck and its tables workbook', 'from step 9'],
   ];
   $('save-list').innerHTML = items.map(([yes, text, where]) =>
@@ -2562,7 +2567,7 @@ function prepFacts() {
   };
 }
 const shareComments = () => [
-  '# Comments: please write them after "comments:", here or in the email. They help us improve the tool.',
+  '# Comments: please write them after "comments:", here or in the email. They help the mLOS team improve the page.',
   ...('comments: ' + $('share-comments').value.trim()).split(/\r?\n/),
   '',
 ];
@@ -2760,7 +2765,7 @@ $('deck-btn').onclick = async () => {
   await startBusy($('deck-btn'), $('tables-only').checked ? 'Building the tables...' : 'Building the deck...');
   $('deck-results').replaceChildren();
   st.className = 'status';
-  st.textContent = deckLoaded ? 'Building...' : 'Loading the deck builder (the first time takes a little longer)...';
+  st.textContent = deckLoaded ? 'Building...' : 'Loading the program that builds the deck (the first time takes a little longer)...';
   try {
     const py = await loadDeckBuilder();
     st.textContent = 'Building...';
@@ -2783,7 +2788,7 @@ $('deck-btn').onclick = async () => {
   } catch (e) {
     st.className = 'status bad';
     const msg = String(e.message || e).split('\n').filter(Boolean);
-    st.textContent = 'The deck builder stopped: ' + (msg.find(l => /Error:/.test(l)) || msg[msg.length - 1]);
+    st.textContent = 'The deck could not be built: ' + (msg.find(l => /Error:/.test(l)) || msg[msg.length - 1]);
     window.demo.errors.push(String(e));
     deckState = 'failed';
     if (shareRes) renderShare();
@@ -2835,7 +2840,7 @@ function showDeck(py, result) {
   pick.append(list, reset);
   const legend = document.createElement('p');
   legend.className = 'help';
-  legend.textContent = 'A small H, L, or F beside a number is the deck’s own mark: the highest level, the lowest, or a column where every level is the same.';
+  legend.textContent = 'A small H, L, or F beside a number is the deck’s own mark: H for the highest number in its column, L for the lowest, and F where every number in the column is the same.';
   draw();
   wrap.append(pick, legend, box);
 }
