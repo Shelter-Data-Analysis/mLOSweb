@@ -24,6 +24,9 @@ An export is often cut by date: by intake date, holding the animals admitted in 
 | `.zenodo.json` | The same metadata in the form Zenodo reads when it archives a release, with the related works it lists |
 | `check_citation.py` | Checks that `CITATION.cff`, `.zenodo.json`, and `pins.py` agree, that `.zenodo.json` uses only names Zenodo reads, and, in a tag build, that the tag names the same version |
 | `.github/workflows/citation.yml` | Runs `check_citation.py` on every push to `main`, every pull request, and every tag, apart from publishing |
+| `run_tests.py` | Runs the tests in `tests/` on four of the page's functions that work on text and dates alone: the CSV reader, the checksum of a file the page wrote, the check that a date exists, and the summary of intake and outcome dates behind the guess of how a file is cut |
+| `tests/pure_functions.js` | The tests, with the expected results |
+| `.github/workflows/tests.yml` | Runs `run_tests.py` on every push to `main` and every pull request, apart from publishing |
 
 No program's code, webR, the packages, nor the demo data is stored in this repository; each build downloads them at the versions in `pins.py`. Downloads are kept in `.cache/`, so a second build is fast.
 
@@ -37,6 +40,8 @@ python3 serve.py
 ```
 
 Then open http://localhost:8000. The first build downloads about 85 MB.
+
+`python3 run_tests.py` tests the four functions named above, without building the site. It runs them in Node, or, on a Mac without Node, in the JavaScript shell that macOS includes. The tests do not cover the rest of the page, the preparation, or the analysis.
 
 ## Publishing
 
