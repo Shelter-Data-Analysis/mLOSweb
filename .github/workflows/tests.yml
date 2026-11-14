@@ -1,0 +1,23 @@
+# Run the tests of the page's pure functions on every push to main and every
+# pull request.  It runs apart from the publishing workflow, so a failed test
+# never stops the site from being published.
+name: Test the page's functions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: python3 run_tests.py
