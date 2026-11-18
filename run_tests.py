@@ -23,8 +23,8 @@ JSC = "/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Help
 # defines them.  A constant must fit on one line of the page; a list starts
 # with 'const NAME = [' and ends with a line that holds '];' alone.
 CONSTANTS = ["fullYear", "EDGE", "addDay"]
-LISTS = ["FORMATS", "TIMES"]
-FUNCTIONS = ["parseCSV", "checksum", "timeOk", "timeShape", "readDate", "validDate", "cutShape"]
+LISTS = ["FORMATS", "TIMES", "OUTCOME_GUESSES"]
+FUNCTIONS = ["parseCSV", "checksum", "timeOk", "timeShape", "readDate", "validDate", "cutShape", "guessOutcome"]
 
 
 def extract(page):

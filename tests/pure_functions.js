@@ -141,6 +141,20 @@ const brief = cutShape(steady.slice(0, 100), '2021-01-01');
 same('cutShape, too few days between the ends for a usual pace', [brief.inRate, brief.outRate], [null, null]);
 same('cutShape, a short file still has its counts', [brief.stays, brief.inEdge], [100, 30]);
 
+// ---------- guessOutcome ----------
+// EUTH, DIED, LOST, ESCAPED, and STOLEN make a label non-live ahead of every
+// other guess: EUTH FIELD is San Diego County DAS's label for a euthanasia in
+// the field, and FIELD alone would make it other live.
+same('guessOutcome, EUTH FIELD is non-live, not other live', guessOutcome('EUTH FIELD'), 'N');
+same('guessOutcome, RTO DIED is non-live, not community live', guessOutcome('RTO DIED'), 'N');
+same('guessOutcome, the five non-live words in any case',
+     ['Euthanized', 'died in care', 'LOST', 'Escaped', 'stolen'].map(guessOutcome), ['N', 'N', 'N', 'N', 'N']);
+same('guessOutcome, still in care', guessOutcome('_UNKNOWN_'), 'in_care');
+same('guessOutcome, RTO-FIELD is community live', guessOutcome('RTO-FIELD'), 'L');
+same('guessOutcome, RTF is other live', guessOutcome('RTF'), 'T');
+same('guessOutcome, DISPOSAL is non-live', guessOutcome('DISPOSAL'), 'N');
+same('guessOutcome, an unknown label has no guess', guessOutcome('ZEBRA'), '');
+
 // ---------- verdict ----------
 for (const f of failures) say('FAILED ' + f);
 say(failures.length ? `${failures.length} of ${checks} checks failed` : `ok: ${checks} checks`);

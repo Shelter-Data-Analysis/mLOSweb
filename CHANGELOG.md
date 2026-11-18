@@ -2,6 +2,10 @@
 
 Each release lists what changed for a visitor to the page, and whether any change can move a number in a result.
 
+## Unreleased
+
+**Numbers.** One change can move a number. In step 8, an outcome type containing EUTH, DIED, LOST, ESCAPED, or STOLEN starts as non-live ahead of every other guess. Before, a label that also contained RTO started as community live, and one that also contained FIELD or RTF as other live; ESCAPED started with no guess. For San Diego County DAS's export of 2024-12-27 (`DAS Animal Inventory_1.1.14 - 12.27.24.xlsx`, all species), EUTH FIELD (6,937 rows) moves from other live to non-live, and ESCAPED (38 rows) starts as non-live. A run that keeps the starting answers for such a label gives different results; a run whose answers set each label gives the same results.
+
 ## 0.3.0 (2026-11-14)
 
 **Numbers.** Three changes can move a number. Step 3 lists columns with up to 100 values, rather than 20, as ways to compare animals, and ticks the size column to start with. For a file whose size column has 21 to 100 values and that has no date of birth, a run with the starting answers compares animals by size, where it compared no animal groups before. The page reads a two-digit year from 69 to 99 as 1969 to 1999, as ShelterDataPrep does, where it read 2069 to 2099. For a file in the month/day/two-digit year format with intake or outcome dates before 2000, the window that step 5 starts with changes, and with it the results of a run that keeps that window. Step 4 reads dates that carry a time. For a file in which some dates carry a time, the dates read change, and with them the stays prepared; a file whose dates carry no time is read as before. A run with the same answers otherwise gives the same results. ShelterDataPrep moves from 0.5.1 to 0.5.2, which adds a format for each date column; its changelog states that no numbers move for a configuration without one.
