@@ -142,13 +142,21 @@ same('cutShape, too few days between the ends for a usual pace', [brief.inRate, 
 same('cutShape, a short file still has its counts', [brief.stays, brief.inEdge], [100, 30]);
 
 // ---------- guessOutcome ----------
-// EUTH, DIED, LOST, ESCAPED, and STOLEN make a label non-live ahead of every
+// EUTH, DIED, LOST, STOLEN, THEFT, and ESC make a label non-live ahead of every
 // other guess: EUTH FIELD is San Diego County DAS's label for a euthanasia in
 // the field, and FIELD alone would make it other live.
 same('guessOutcome, EUTH FIELD is non-live, not other live', guessOutcome('EUTH FIELD'), 'N');
 same('guessOutcome, RTO DIED is non-live, not community live', guessOutcome('RTO DIED'), 'N');
 same('guessOutcome, the five non-live words in any case',
      ['Euthanized', 'died in care', 'LOST', 'Escaped', 'stolen'].map(guessOutcome), ['N', 'N', 'N', 'N', 'N']);
+// ESC counts where no letter comes before it, so RESCUE stays other live.
+same('guessOutcome, ESC and THEFT are non-live',
+     ['ESC', 'esc field', 'RTO_ESC', 'THEFT', 'Owner Theft'].map(guessOutcome), ['N', 'N', 'N', 'N', 'N']);
+same('guessOutcome, RESCUE is other live, not non-live', guessOutcome('RESCUE'), 'T');
+// FOUND EXP, LOST EXP, and HOME EXP are not stays; LOST alone would make
+// LOST EXP non-live.
+same('guessOutcome, the EXP types are not stays',
+     ['FOUND EXP', 'LOST EXP', 'Home Exp', 'LOST_EXP'].map(guessOutcome), ['delete', 'delete', 'delete', 'delete']);
 same('guessOutcome, still in care', guessOutcome('_UNKNOWN_'), 'in_care');
 same('guessOutcome, RTO-FIELD is community live', guessOutcome('RTO-FIELD'), 'L');
 same('guessOutcome, RTF is other live', guessOutcome('RTF'), 'T');
