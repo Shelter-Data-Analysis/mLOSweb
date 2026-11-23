@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>How long do animals stay? mLOS Web</title>
+<title>How long do animals stay? mLOSweb</title>
 <style>
 :root { color-scheme: light; --bg:#f5f6f4; --card:#fff; --fg:#1c2321; --muted:#47514e; --line:#cfd4d1; --accent:#2a6655; --warn:#8f4c0a; --bad:#b3261e; --ok:#2a6655; }
 * { box-sizing: border-box; }
@@ -125,7 +125,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
 <body>
 <main>
   <header>
-    <p class="kicker">mLOS Web: length of stay for animal shelters</p>
+    <p class="kicker">mLOSweb: length of stay for animal shelters</p>
     <h1>How long do animals stay in your shelter?</h1>
     <p class="lede">Load your shelter's records (a spreadsheet with a row for each animal's stay), answer a few questions about it, and get charts, tables, and a slide deck that answer questions such as these:</p>
     <ul class="asks">
@@ -162,7 +162,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <p class="status" id="s1-status"></p>
     <div class="scroll" id="preview"></div>
     <details id="files-box"><summary>Back with the files from an earlier run? (a ShelterDataPrep configuration or an mLOS settings file)</summary>
-      <p class="help">Each run saves two files that record its answers: a ShelterDataPrep configuration, for steps 2 to 6, and an mLOS settings file, for the choices in step 8. Load either, or both, with the same records to give the same answers again. A file this page wrote fills in the answers, to check or change; one edited by hand, or prepared for the programs on your own computer, runs as written, except for the changes the page lists.</p>
+      <p class="help">Each run writes two files that record its answers: a ShelterDataPrep configuration, for steps 2 to 6, and an mLOS settings file, for the choices in step 8. Load either, or both, with the same records to give the same answers again. A file this page wrote fills in the answers, to check or change; one edited by hand, or prepared for the programs on your own computer, runs as written, except for the changes the page lists.</p>
       <div class="grid2">
         <label for="cfg-input">ShelterDataPrep configuration</label>
         <span class="file-row"><input type="file" id="cfg-input" accept=".yaml,.yml"><button class="secondary" id="cfg-drop" hidden>Stop using it</button></span>
@@ -195,7 +195,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <button class="secondary" id="notstay-add">Add another column</button>
     <p class="status" id="s2b-note"></p>
     <h3 style="margin:8px 0 0">Ways to compare animals</h3>
-    <p class="help">Tick the columns you may want to compare animals by, such as size or sex. Step 8 compares by one of them, and can switch to another without starting over. Listed are your file's columns with 2 to 100 different values, and the age group, which step 6 works out from the date of birth.</p>
+    <p class="help">Tick the columns you may want to compare animals by, such as size or sex. Step 8 compares by one of them, and can switch to another without starting over. The list holds the age group, which step 6 works out from the date of birth, and your file's columns with 2 to 100 different values, other than the species column and the columns chosen in step 2 for the animal ID, the dates, and the intake and outcome types. Leave unticked a column recorded when an animal leaves, such as an outcome subtype or the animal's condition at outcome: it describes how a stay ended, so comparing stays by it mixes the outcome into the comparison.</p>
     <div class="help" id="carry-cols" style="columns: 2 240px"></div>
   </section>
 
@@ -258,7 +258,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <datalist id="intake-groups"></datalist>
     <p class="status" id="intake-note"></p>
     <h3 style="margin:8px 0 0">Set the periods</h3>
-    <p class="help">The analysis compares periods of the study window, to show whether stays grew longer or shorter. Add up to three dividing dates to split it into as many as four periods, and name each one. Choose the dates before looking at the results: at real events where there are any (a new program, a policy change), otherwise at calendar years or half-years. Aim for at least 100 outcomes in each period.</p>
+    <p class="help">The analysis compares periods of the study window, to show whether stays grew longer or shorter. The page suggests dividing dates at New Year that split it into about four periods; change them, or clear any, using up to three dates for as many as four periods, and name each period. Choose the dates before looking at the results: at real events where there are any (a new program, a policy change), otherwise at calendar years or half-years. Aim for at least 100 outcomes in each period.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
       <span class="help">Dividing dates (each starts a new period):</span>
       <input type="date" id="div-0" aria-label="Dividing date 1">
@@ -280,11 +280,11 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
     <p class="help">The horizon is the longest stay the analysis follows, in days (in the settings file, <code>restricted_stay_cap</code>). A stay that reaches it counts as in care up to that day, and nothing after that day is used. Too low, and real long stays are cut short; too high, and a few mistaken records can dominate the averages. Start at 365 days. After the run, the checks shown with the results give the share of animals still in care at the horizon. The plots can stop earlier than the horizon, to show the first weeks in more detail.</p>
     <div class="grid2 hinted">
       <label for="cap">Horizon (days)<span class="map-hint">the longest stay followed</span></label><input type="number" id="cap" value="365" min="1" step="1">
-      <label for="plot-cap">Plots show days up to<span class="map-hint">no more than the horizon</span></label><input type="number" id="plot-cap" value="58" min="1" step="1">
+      <label for="plot-cap">Plots show days up to<span class="map-hint">no more than the horizon; 58 shows about the first two months</span></label><input type="number" id="plot-cap" value="58" min="1" step="1">
     </div>
     <p class="status" id="cap-note"></p>
     <h3 style="margin:8px 0 0">Choose the reference groups</h3>
-    <p class="help">A reference group is the group that the others are compared with: for example, whether owner surrenders leave sooner or later than strays. Each comparison is a ratio (a hazard ratio in the tables). Above 1, the animals of a group leave faster than those of the reference group, so their stays are shorter; below 1, they leave more slowly. The largest group is usually the right reference group; choose another large group if the ratios come out extreme or their confidence intervals, the ranges of uncertainty around them, very wide.</p>
+    <p class="help">A reference group is the group that the others are compared with: for example, whether owner surrenders leave sooner or later than strays. Each comparison is a ratio (a hazard ratio in the tables). Above 1, the animals of a group leave faster than those of the reference group, so their stays are shorter; below 1, they leave more slowly. The page compares each period with the first one. The largest group is usually the right reference group; choose another large group if the ratios come out extreme or their confidence intervals, the ranges of uncertainty around them, very wide.</p>
     <div class="grid2 hinted">
       <label for="ref-intake">Intake groups compared with<span class="map-hint">the reference group for intake</span></label><select id="ref-intake"></select>
       <label for="ref-group">Animal groups compared with<span class="map-hint">the reference group for animals</span></label><select id="ref-group"></select>
@@ -300,7 +300,7 @@ button.stale { background:#facc15; border-color:#a16207; color:#3b2a05; box-shad
   <section id="s7" class="locked" inert>
     <span class="step">Step 9</span>
     <h2>Build the slide deck and its tables</h2>
-    <p class="help">This step turns the results into a PowerPoint slide deck of the findings and an Excel workbook of the tables the slides draw on. The page then shows the tables you pick.</p>
+    <p class="help">This step turns the results into a PowerPoint slide deck of the findings and an Excel workbook of the tables the slides draw on. The page then shows the tables you pick. The tables call the horizon of step 8 the stay cap.</p>
     <details class="analysts"><summary>For analysts: the program behind this step</summary>
     <p class="help">The deck builder, mlos_review, comes with mLOS and reads the results of the analysis. This page runs it with its default settings. On your own computer the same builder runs as <code>python3 -m mlos_review.deck</code>.</p>
     </details>
@@ -745,7 +745,9 @@ function sourceChange() {
 // The page's own files end with its form answers, so loading one back fills
 // in the forms. A checksum of the rest of the file says whether it was edited
 // since the page wrote it; an edited file runs as written instead.
-const ANSWERS_MARK = '# mLOS Web form answers';
+// Files written before the page took the name mLOSweb carry the older mark,
+// and still fill in the forms.
+const ANSWERS_MARK = '# mLOSweb form answers', OLD_ANSWERS_MARKS = ['# mLOS Web form answers'];
 let pendingConfigAnswers = null, pendingLabels = null, wantGroup = null;
 function checksum(text) {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -764,8 +766,9 @@ function withAnswers(text, answers) {
     `# ${JSON.stringify({ checksum: checksum(body), answers })}\n`;
 }
 function readAnswers(text) {
-  const t = text.replace(/\r\n/g, '\n'), i = t.indexOf('\n' + ANSWERS_MARK);
-  if (i < 0) return null;
+  const t = text.replace(/\r\n/g, '\n');
+  const i = [ANSWERS_MARK, ...OLD_ANSWERS_MARKS].map(m => t.indexOf('\n' + m)).find(k => k >= 0);
+  if (i == null) return null;
   try {
     const j = JSON.parse(t.slice(i + 1).split('\n').filter(Boolean).pop().replace(/^# /, ''));
     return { edited: j.checksum !== checksum(t.slice(0, i + 1)), answers: j.answers };
@@ -969,7 +972,7 @@ json.dumps({k: raw.get(k) for k in ${JSON.stringify([...FORCED_OFF.map(x => x[0]
       if (values[key] === null || values[key] === false) continue;
       const lines = text.match(new RegExp('^' + key + '[ \\t]*:.*$', 'gm'));
       if (!lines || lines.length !== 1) throw new Error(`write ${key} on a line of its own, so the page can turn it off`);
-      effective = effective.replace(new RegExp('^' + key + '[ \\t]*:.*$', 'm'), `${key}: false  # turned off by mLOS Web`);
+      effective = effective.replace(new RegExp('^' + key + '[ \\t]*:.*$', 'm'), `${key}: false  # turned off by mLOSweb`);
       changes.push(`${key} is turned off: ${why}.`);
     }
     // mLOS reads the file as its run will, so a misspelled or misplaced
@@ -1369,7 +1372,7 @@ function configBody() {
   const m = mapping();
   const ages = ageGroups(), size = !!m.animal_size, age = !!m.dob && ages.length > 0;
   const cols = FIELDS.filter(f => m[f.key]).map(f => `  ${f.key}: ${JSON.stringify(m[f.key])}`).join('\n');
-  return `# Written by mLOS Web from steps 2 to 6. source_dir, source_file, and
+  return `# Written by mLOSweb from steps 2 to 6. source_dir, source_file, and
 # dest_dir name the page's own files; change them to run this file on your computer.
 source_dir:  "/work"
 source_file: ${JSON.stringify(exportSource.file)}
@@ -1478,9 +1481,11 @@ function guessText(g) {
     : g.start === 'outcome' ? 'the animals that left on or after its first outcome date, and those still in care (a file cut by outcome date at its start)'
     : 'every animal that arrived in its date range, including those still in care (a file cut by intake date, or not cut)';
   const share = (x) => `${Math.round(100 * x)}%`;
-  const start = `In its first ${EDGE} days it has ${g.inEdge.toLocaleString()} intake${g.inEdge === 1 ? '' : 's'} from ${g.a}, ${share(g.inPace)} of its usual pace, and ${g.outEdge.toLocaleString()} outcome${g.outEdge === 1 ? '' : 's'} from ${g.b}, ${share(g.outPace)} of theirs`;
+  // The intakes and the outcomes are counted over two different spans, each
+  // from its own first date, and the sentence names both.
+  const start = `In the ${EDGE} days from its first intake, on ${g.a}, it has ${g.inEdge.toLocaleString()} intake${g.inEdge === 1 ? '' : 's'}, ${share(g.inPace)} of the usual pace of intakes; in the ${EDGE} days from its first outcome, on ${g.b}, it has ${g.outEdge.toLocaleString()} outcome${g.outEdge === 1 ? '' : 's'}, ${share(g.outPace)} of the usual pace of outcomes`;
   const end = g.open ? `${g.open.toLocaleString()} stay${g.open === 1 ? '' : 's'} with no outcome date` : 'no stay without an outcome date';
-  return `Your file seems to hold ${kind}. ${start}; it has ${end}.` + (ownConfig ? '' : ' The default window assumes this.');
+  return `Your file seems to hold ${kind}. ${start}. It has ${end}.` + (ownConfig ? '' : ' The default window assumes this.');
 }
 // The analysis follows a stay up to the cap, so an export cut by intake date
 // misses nothing once the window starts a cap's length after its first intake.
@@ -1558,7 +1563,7 @@ function windowNote() {
     if (!ownConfig) {
       const i = header.indexOf(mapping().intake_date);
       const after = rows.map(r => isoOf(r[i], 'intake_date')).filter(x => x && x >= e).length;
-      if (after) tail.push(`${after.toLocaleString()} intake(s) fall on or after the stop date and will be dropped.`);
+      if (after) tail.push(`${after.toLocaleString()} intake${after === 1 ? ' falls' : 's fall'} on or after the stop date and ${after === 1 ? 'is' : 'are'} left out.`);
     }
   } else if (ownConfig && header.length) {
     lines.push('Reading the file\'s dates...');
@@ -1726,7 +1731,7 @@ function showPrep(stats, preparedText, statsText) {
   const rowsP = parseCSV(preparedText);
   const wrap = $('prep-results');
   const num = (v) => v === '' ? '' : (+v).toLocaleString();
-  let html = '<caption class="help" style="text-align:left">What the preparation did, in order. The step numbers are its own, not those of this page. Indented lines count the rows matched by each value a rule names.</caption>' +
+  let html = '<caption class="help" style="text-align:left">What the preparation did, in order. The step numbers are its own, not those of this page. Indented lines count the rows matched by each value a rule names; the values a rule names that match no row share one line.</caption>' +
     '<thead><tr><th>Step</th><th>Action</th><th>Rule</th><th class="num">Rows in</th><th class="num">Changed or removed</th><th class="num">Rows out</th></tr></thead><tbody>';
   for (const r of stage) {
     const step = col(r, 'step'), action = col(r, 'action');
@@ -1734,11 +1739,17 @@ function showPrep(stats, preparedText, statsText) {
                  action === 'parse_dates' ? col(r, 'column') + ': ' + col(r, 'detail') : col(r, 'detail');
     html += `<tr><td>${esc(step)}</td><td>${esc(action)}</td><td>${esc(rule)}</td><td class="num">${num(col(r, 'rows_in'))}</td>` +
             `<td class="num">${num(col(r, 'rows_affected'))}</td><td class="num">${num(col(r, 'rows_out'))}</td></tr>`;
-    for (const d of detail.filter(d => col(d, 'step') === step)) {
+    // A rule can name many values that match nothing, such as the outcome
+    // types of the rule on outcomes with no outcome date; they share one line.
+    const sub = (what, n) => `<tr class="sub"><td></td><td></td><td style="padding-left:16px; color:var(--muted)">${esc(what)}</td><td></td>` +
+                             `<td class="num" style="color:var(--muted)">${n}</td><td></td></tr>`;
+    const lines = detail.filter(d => col(d, 'step') === step);
+    const none = lines.filter(d => col(d, 'role') !== 'where' && col(d, 'rows_affected') === '0');
+    for (const d of lines.filter(d => !none.includes(d))) {
       const what = col(d, 'role') === 'where' ? `only where ${col(d, 'column')} is ${col(d, 'value')}` : `${col(d, 'column')} = ${col(d, 'value')}`;
-      html += `<tr class="sub"><td></td><td></td><td style="padding-left:16px; color:var(--muted)">${esc(what)}</td><td></td>` +
-              `<td class="num" style="color:var(--muted)">${num(col(d, 'rows_affected'))}</td><td></td></tr>`;
+      html += sub(what, num(col(d, 'rows_affected')));
     }
+    if (none.length) html += sub(`${col(none[0], 'column')}: no row matches ${none.map(d => col(d, 'value')).join(', ')}`, '0');
   }
   const t = document.createElement('table'); t.innerHTML = html + '</tbody>';
   const ages = countBy(rowsP, 'age_group');
@@ -1984,7 +1995,7 @@ function periodsYaml() {
 // animal_group_filter_pass, as the intake labels are; with no column chosen,
 // the settings leave out animal_group_columns and mLOS compares no groups.
 const CORE_COLUMNS = ['animal_id', 'intake_date', 'outcome_date', 'outcome_type', 'intake_type'];
-const GROUP_LABELS = { age_group: 'age group', animal_size: 'animal_size (the size column of step 2)' };
+const GROUP_LABELS = { age_group: 'age group', animal_size: 'size (the column chosen for Size in step 2)' };
 // A name as YAML reads it back: bare when it is a plain word, and quoted
 // otherwise, including the words a YAML reader takes as true, false, or
 // nothing (an age group named NO; PyYAML reads Y and N as text, and other
@@ -2389,12 +2400,17 @@ async function showRun(out, from) {
 
   const wrap = $('run-results');
   const intro = document.createElement('p'); intro.className = 'help';
-  const withCsv = pngs.filter(n => csvOf[n]).length;
-  intro.append(`${names.length} files were written: ${pngs.length} plots, ${withCsv === pngs.length ? 'each with a CSV of its numbers' : `${withCsv} of them with a CSV of their numbers`}, plus the Excel workbook, the log, and a file of the results for programs to read (results.json). ` +
+  intro.append('mLOS wrote its plots, a CSV of the numbers behind each plot that draws numbers of its own, an Excel workbook of the results, the tables of its data preparation, a log, and a file of the results for programs to read (results.json). ' +
                'Each plot shown below has links to download it and its CSV. ' +
-               'The results zip holds all of them, with the ShelterDataPrep configuration and the mLOS settings file this run was made from.');
+               'The results zip holds every file, with the ShelterDataPrep configuration and the mLOS settings file this run was made from.');
+  // The words in the plot titles and the tables, for a reader new to them.
+  const terms = document.createElement('p'); terms.className = 'help';
+  terms.textContent = 'In the plot titles and the tables, LOS is length of stay, the days from intake to outcome. ' +
+    'A Kaplan-Meier curve gives the share of animals still in care after each number of days, estimated so that the animals still in care when the records end count too. ' +
+    'Tenure is how long an animal in care on a given day has been there so far, and census is the number of animals in care. ' +
+    'The stay cap is the horizon of step 8 (restricted_stay_cap).';
   const links = downloadLine('run', [
-    ['mlos_results.zip', zipBytes, 'application/zip', `All ${names.length} result files`, 'zip'],
+    ['mlos_results.zip', zipBytes, 'application/zip', 'All the result files', 'zip'],
     ['mlos_settings.yaml', window.demo.settingsYaml, 'text/yaml', 'The settings file', 'YAML']]);
   for (const a of links.querySelectorAll('a')) runUrls.push(a.href);
   madeGroup('run');
@@ -2456,7 +2472,7 @@ async function showRun(out, from) {
   reset.onclick = () => { chosenPlots = null; list.querySelectorAll('input').forEach((i, k) => i.checked = shown().includes(pngs[k])); draw(); };
   pick.append(list, reset);
   draw();
-  wrap.append(intro, links, await runChecks(out, lastRunCap, lastRunLead), grid, pick);
+  wrap.append(intro, terms, links, await runChecks(out, lastRunCap, lastRunLead), grid, pick);
   const sd = document.createElement('details');
   sd.innerHTML = '<summary>Show the mLOS settings file</summary><pre></pre>';
   sd.querySelector('pre').textContent = window.demo.settingsYaml;
@@ -2486,7 +2502,7 @@ function saveRefresh() {
   lock('s9', !set.prep && !set.run);
   const items = [
     [!!set.prep, 'The prepared data, the full step table, and the ShelterDataPrep configuration', 'from step 7'],
-    [!!set.run, set.run ? `The results of the analysis, ${set.run.names.length} files, with the mLOS settings file` : 'The results of the analysis and the mLOS settings file', 'from step 8'],
+    [!!set.run, 'The results of the analysis, with the mLOS settings file', 'from step 8'],
     [!!set.deck, set.deck ? (set.deck['mlos_deck.pptx'] ? 'The slide deck and its tables workbook' : 'The tables workbook') : 'The slide deck and its tables workbook', 'from step 9'],
   ];
   $('save-list').innerHTML = items.map(([yes, text, where]) =>
@@ -2494,7 +2510,7 @@ function saveRefresh() {
   $('save-stale').hidden = !(set.run && (shownState === 'stale' || !prepared));
 }
 const README_TXT = (set) => [
-  'Files made by mLOS Web, ' + new Date().toISOString().slice(0, 10) + ', from ' + set.name + '.',
+  'Files made by mLOSweb, ' + new Date().toISOString().slice(0, 10) + ', from ' + set.name + '.',
   $('versions').textContent,
   '',
   'shelterprep_config.yaml  the ShelterDataPrep configuration that prepared the data.',
@@ -2658,7 +2674,7 @@ function partialData() {
 }
 function renderShare() {
   if (!shareRes) return showShare([
-    'mLOS Web comments, sent before any analysis was run: no results and no record of any animal.',
+    'mLOSweb comments, sent before any analysis was run: no results and no record of any animal.',
     'Delete any line you prefer not to share.',
     '',
     '# Run',
@@ -2675,7 +2691,7 @@ function renderShare() {
   const per = st.periods.columns;
   const labels = (k) => [].concat(res.strata[k] ? res.strata[k].labels : []).join(' | ') || 'none';
   const lines = [
-    'mLOS Web run summary: how the study was set up, with no results and no record of any animal.',
+    'mLOSweb run summary: how the study was set up, with no results and no record of any animal.',
     'Delete any line you prefer not to share.',
     '',
     '# Run',
@@ -2690,6 +2706,7 @@ function renderShare() {
     `columns_carried: ${f.columns_carried}`,
     `cut_by_date_guess: ${f.cut_by_date_guess}`,
     `rows_read: ${dp.rows_read}`,
+    '# rows_analyzed counts a stay that spans a period boundary once in each period, so it can exceed rows_read.',
     `rows_analyzed: ${dp.rows_analyzed}`,
     `animals: ${dp.n_animals}`,
     `stays: ${all.unified_stay_counts.columns.total_stays[0]}`,
@@ -2720,7 +2737,7 @@ function showShare(lines) {
   window.demo.shareLength = len;
 }
 function shareUrl() {
-  return `mailto:${SHARE_TO}?subject=${encodeURIComponent(shareRes ? 'mLOS Web run summary' : 'mLOS Web comments')}&body=${encodeURIComponent(shareText)}`;
+  return `mailto:${SHARE_TO}?subject=${encodeURIComponent(shareRes ? 'mLOSweb run summary' : 'mLOSweb comments')}&body=${encodeURIComponent(shareText)}`;
 }
 window.demo.shareUrl = shareUrl;
 $('share-comments').oninput = renderShare;
@@ -2803,9 +2820,11 @@ for sheet in sheets:
                     flag = table.flags.loc[key, measure] or ''
                 spec = cell_format(table, key, measure)
                 # As the workbook does: a value its format would show as zero
-                # (a p-value of 3.7e-06 under four decimals) is shown in full.
+                # (a p-value of 3.7e-06 under four decimals) is shown in full,
+                # and a share in a column of percentages as a percentage
+                # (0.016%, not 0.000158).
                 if isinstance(value, (int, float)) and rounds_to_zero(float(value), spec):
-                    text = '{0:.3g}'.format(float(value))
+                    text = '{0:.2g}%'.format(100 * float(value)) if spec.percent else '{0:.3g}'.format(float(value))
                 else:
                     text = format_value(value, spec)
                 cells.append([text, str(flag)])
@@ -2884,7 +2903,7 @@ function showDeck(py, result) {
     window.demo.shownTables = chosenTables.filter(c => all.some(t => id(t) === c));
   };
   const pick = document.createElement('details');
-  pick.innerHTML = `<summary>Choose which tables to show (${all.length} in the workbook)</summary>`;
+  pick.innerHTML = '<summary>Choose which tables to show</summary>';
   const list = document.createElement('div');
   list.style.cssText = 'columns: 2 300px; font-size:14px; margin-top:8px';
   all.forEach((t, k) => {

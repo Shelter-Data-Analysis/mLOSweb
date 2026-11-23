@@ -1,4 +1,4 @@
-# mLOS Web
+# mLOSweb
 
 A web page that runs ShelterDataPrep and mLOS in the browser, for animal shelters without an R or Python installation. The shelter loads an export of its stays, as a CSV file or an Excel workbook, answers a few questions about it, and gets the mLOS plots, tables, and workbook. Each plot is captioned with its file name and, beneath it, the title mLOS draws on the figure. The plots shown first are the overall length-of-stay curve and the in-care tenure curve, which carry their summary statistics on the plot, followed by those that answer the example questions at the top of the page: length of stay by period, by intake type, and by animal group; the remaining stay and the outcome mix by days already in care; and the animals in care by days already in care, by animal group or, with none, by intake type. A list offers every other plot. A ShelterDataPrep configuration or an mLOS settings file, whether the page wrote it or it was prepared by hand, can stand in for the questions; the page lists each change it makes to such a file, such as turning off a feature the site does not run. Everything runs in the visitor's browser: the data is not uploaded anywhere. Each button that starts work, from loading a demo export to saving the zip, shows until the work ends that it is under way: it turns into a turning ring with a label saying what is being done, such as "Preparing the data...", and takes no second press. Each step offers its files for download where they appear, each plot with its picture and, where mLOS writes one, the CSV of its numbers, and a last step saves all of them in one zip; leaving the page with files made and not downloaded asks the visitor to confirm. An optional last step opens a new email to the mLOS team in the visitor's own email program, holding a summary of the run that the page shows first: how the page was used and how the study was set up (counts, dates, choices, and group names, with no results), one `key: value` per line so the replies can be read by a program. The step asks the visitor, prominently, for comments on the page; they fill the `comments:` line at the end of the summary, the one entry that may run over several lines, and a visitor can also write them in the email itself. The step is open from the start, so a visitor who stops partway can still send comments: until mLOS has run, the email holds the comments and what the page knows so far: the versions, the date, and how far the visitor got (`stage`); once an export is loaded, how it was loaded, the species, and the export's numbers of rows and columns; and once the data is prepared, the number of prepared rows. The visitor can delete any line, and chooses whether to send it.
 
@@ -24,7 +24,7 @@ An export is often cut by date: by intake date, holding the animals admitted in 
 | `.zenodo.json` | The same metadata in the form Zenodo reads when it archives a release, with the related works it lists |
 | `check_citation.py` | Checks that `CITATION.cff`, `.zenodo.json`, and `pins.py` agree, that `.zenodo.json` uses only names Zenodo reads, and, in a tag build, that the tag names the same version |
 | `.github/workflows/citation.yml` | Runs `check_citation.py` on every push to `main`, every pull request, and every tag, apart from publishing |
-| `run_tests.py` | Runs the tests in `tests/` on five of the page's functions that work on text and dates alone: the CSV reader, the checksum of a file the page wrote, the check that a date exists, the summary of intake and outcome dates behind the guess of how a file is cut, and the starting guess of what each outcome type means |
+| `run_tests.py` | Runs the tests in `tests/` on the page's functions that work on text and dates alone, among them the CSV reader, the checksum of a file the page wrote, the check that a date exists, the summary of intake and outcome dates behind the guess of how a file is cut, and the starting guess of what each outcome type means |
 | `tests/pure_functions.js` | The tests, with the expected results |
 | `.github/workflows/tests.yml` | Runs `run_tests.py` on every push to `main` and every pull request, apart from publishing |
 
@@ -41,7 +41,7 @@ python3 serve.py
 
 Then open http://localhost:8000. The first build downloads about 85 MB.
 
-`python3 run_tests.py` tests the five functions named above, without building the site. It runs them in Node, or, on a Mac without Node, in the JavaScript shell that macOS includes. The tests do not cover the rest of the page, the preparation, or the analysis.
+`python3 run_tests.py` tests the functions named above, without building the site. It runs them in Node, or, on a Mac without Node, in the JavaScript shell that macOS includes. The tests do not cover the rest of the page, the preparation, or the analysis.
 
 ## Publishing
 
@@ -64,7 +64,7 @@ Zenodo archives each GitHub release of this repository and gives it a DOI. It bu
 1. In `CITATION.cff`, set `version` and `date-released`, the date in UTC (`TZ=UTC date +%F`), since GitHub stamps tags in UTC. In `.zenodo.json`, set `version`, the version in `title`, and the tag in the GitHub tree link to the same version.
 2. In `CHANGELOG.md`, rename the "Unreleased" heading to the version and the same date, such as `## 0.1.0 (2026-11-11)`. Run `python3 check_citation.py`, then merge these changes into `main` through a pull request.
 3. On GitHub, create a release whose tag is `v` followed by the version, such as `v0.1.0`, the tag the tree link names. The record's description comes from `.zenodo.json`, not from the release notes.
-4. When Zenodo has archived it, check the record: the title `mLOSweb (Version X.Y.Z)`, the version with no leading `v`, the related works, the two references, and the license.
+4. When Zenodo has archived it, check the record: the title `mLOSweb (Version X.Y.Z)`, the version with no leading `v`, the related works, the references, and the license.
 5. After the first archived release, add Zenodo's concept DOI, the one that resolves to the newest release, as `doi:` in `CITATION.cff` and as a link in this README.
 
 The repository is switched on in Zenodo; Zenodo archives no release made before that.
