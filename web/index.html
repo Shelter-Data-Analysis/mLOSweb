@@ -457,7 +457,7 @@ function parseCSV(text, limit = Infinity) {
 function loadText(name, text) {
   const all = parseCSV(text), at = all.findIndex(r => r.some(v => v.trim()));
   $('sheet-row').hidden = true; $('sheet-note').textContent = '';
-  if (at < 0) { $('s1-status').className = 'status bad'; $('s1-status').textContent = `${name} has no column names: every row is empty.`; return; }
+  if (at < 0) { $('s1-status').className = 'status bad'; $('s1-status').textContent = `${name} has no column names: every row is empty.` + stillUsing(); return; }
   loadTable(name, { file: 'export.csv', data: text, sheet: null, headerRow: at, emptyRows: 0 }, all[at].map(h => h.trim()), all.slice(at + 1));
 }
 // A column with no name and no values, such as a spacer between columns, is
@@ -523,9 +523,14 @@ $('load-demo').onclick = async () => {
 };
 // A CSV file is read at once; a large one takes a moment, so the status says so first.
 async function readingNote(name) { $('s1-status').className = 'status'; $('s1-status').textContent = `Reading ${name}...`; await paint(); }
+// A file that cannot be loaded leaves the one loaded before in use, and the
+// message says which.
+const stillUsing = () => exportSource ? ` The steps below still use ${exportName}${exportSource.sheet ? ', sheet ' + exportSource.sheet : ''}.` : '';
 $('file-input').onchange = async (e) => {
   const f = e.target.files[0];
   if (!f) return;
+  // Cleared, so that choosing the same file again loads it again.
+  e.target.value = '';
   const lower = f.name.toLowerCase();
   if (/\.xls[xm]$/.test(lower)) return loadWorkbook(f);
   if (lower.endsWith('.xls')) {
@@ -535,7 +540,18 @@ $('file-input').onchange = async (e) => {
   }
   // A .gz export, as the Zenodo deposits hold them, is read uncompressed.
   await readingNote(f.name);
-  const text = lower.endsWith('.gz') ? await new Response(f.stream().pipeThrough(new DecompressionStream('gzip'))).text() : await f.text();
+  let text;
+  try {
+    text = lower.endsWith('.gz') ? await new Response(f.stream().pipeThrough(new DecompressionStream('gzip'))).text() : await f.text();
+  } catch (err) {
+    $('s1-status').className = 'status bad';
+    // A browser reports a damaged .gz file as "Failed to fetch", which says
+    // nothing to the visitor, so the page gives its own reason.
+    $('s1-status').textContent = (lower.endsWith('.gz') ? `${f.name} cannot be read: it is damaged, or it is not a gzipped file.`
+      : `${f.name} cannot be read: ${err.message || err}.`) + stillUsing();
+    window.demo.errors.push(String(err));
+    return;
+  }
   loadText(f.name, text);
 };
 
@@ -597,7 +613,10 @@ json.dumps({'repaired': repaired, 'sheets': [{'name': name, 'header': names(name
                  repair: info.repaired ? `${f.name} gives its fonts a family above 14, which Excel writes and openpyxl, the program that reads workbooks for ShelterDataPrep, refuses. ShelterDataPrep reads a copy without those ${info.repaired} font settings, which change how text is drawn and no cell value, and its run log says so.` : '' };
     const sel = $('sheet-sel');
     sel.innerHTML = sheets.map((s, k) => `<option value="${k}">${esc(s.name)} (${s.rows === null ? '' : `about ${s.rows.toLocaleString()} rows, `}${s.header.length} column${s.header.length === 1 ? '' : 's'})</option>`).join('');
-    sel.onchange = () => readSheet(sheets[+sel.value]);
+    sel.onchange = () => readSheet(sheets[+sel.value]).catch((err) => {
+      st.className = 'status bad'; st.textContent = `Sheet ${sheets[+sel.value].name} cannot be read: ${pyError(err)}` + stillUsing();
+      window.demo.errors.push(String(err));
+    });
     $('sheet-row').hidden = sheets.length < 2;
     const { sheet, why } = guessSheet(sheets);
     sel.value = String(sheets.indexOf(sheet));
@@ -605,7 +624,7 @@ json.dumps({'repaired': repaired, 'sheets': [{'name': name, 'header': names(name
     await readSheet(sheet);
   } catch (err) {
     st.className = 'status bad';
-    st.textContent = `${f.name} cannot be read as a workbook: ${pyError(err)}`;
+    st.textContent = `${f.name} cannot be read as a workbook: ${pyError(err)}` + stillUsing();
     window.demo.errors.push(String(err));
   }
 }
@@ -627,7 +646,16 @@ except SourceError as e:
 json.dumps(result)`));
   $('sheet-note').className = workbook.repair ? 'status warn' : 'status';
   $('sheet-note').textContent = workbook.note;
-  if (t.error) { st.className = 'status bad'; st.textContent = `Sheet ${sheet.name} cannot be read: ${t.error.replace('/work/export.xlsx', workbook.name).replace('export.xlsx', workbook.name)}. Choose another.`; $('preview').replaceChildren(); return; }
+  if (t.error) {
+    // The sheet in use, when it is in this workbook, shows in the list again.
+    const loaded = exportSource && exportSource.data === workbook.data ? workbook.sheets.findIndex(s => s.name === exportSource.sheet) : -1;
+    if (loaded >= 0) $('sheet-sel').value = String(loaded);
+    st.className = 'status bad';
+    st.textContent = `Sheet ${sheet.name} cannot be read: ${t.error.replace(/(\/work\/)?export\.xlsx/g, workbook.name)}.` +
+      (workbook.sheets.length > 1 ? ' Choose another sheet above.' : '') + stillUsing();
+    $('preview').replaceChildren();
+    return;
+  }
   const moved = t.moved.map(([heading, column]) => `${heading} (the column pandas names ${column})`);
   $('sheet-note').textContent = [workbook.note, moved.length ? `Headings merged across columns name the column of values under them, as ShelterDataPrep reads them: ${moved.join('; ')}.` : ''].filter(Boolean).join(' ');
   loadTable(workbook.name, { file: 'export.xlsx', data: workbook.data, sheet: sheet.name, headerRow: t.header_row, emptyRows: t.empty }, t.header.map(h => h.trim()), t.rows);
@@ -657,7 +685,9 @@ function pyError(e) {
 }
 // An error from ShelterDataPrep reading the visitor's file names that file as
 // the visitor knows it, not by its name in Python's file system.
-const prepError = (e) => pyError(e).replaceAll(exportSource.file, exportName);
+// One pass, so a visitor's name that holds the page's own (my_export.csv) is
+// not replaced a second time.
+const prepError = (e) => pyError(e).replace(new RegExp('(/work/)?' + exportSource.file.replace('.', '\\.'), 'g'), exportName);
 // An R error's message without the call that raised it, which names mLOS internals.
 const rError = (e) => String(e.message || e).replace(/^Error in [\s\S]*?: /, '');
 // A file loaded in the other program's place says so before any other message.
@@ -1474,10 +1504,13 @@ const firstOfMonthOnOrBefore = (iso) => iso.slice(0, 7) + '-01';
 // window starts a cap's length after the first intake, or at the first outcome
 // for a cut by outcome date, and stops at a month start the records reach, a
 // cap's length before the last outcome for a cut by outcome date at the end.
+// An uploaded configuration sets its own window, which the steps show and the
+// window checks read, so no default replaces it.
 let windowEdited = false;
 function defaultWindow() {
+  if (windowEdited || ownConfig) return;
   const facts = formFacts(), limit = stopLimit(facts), first = facts.intake_date && facts.intake_date.first;
-  if (windowEdited || !first || !limit) return;
+  if (!first || !limit) return;
   const guess = cutGuess(facts), early = guess && guess.end === 'outcome' && outcomeStop(facts);
   let stop = firstOfMonthOnOrBefore(early && early < limit.stop ? early : limit.stop);
   let start = firstOfMonthOnOrAfter(guess && guess.start === 'outcome' ? guess.b : addDay(first, capValue() || 365));
@@ -1643,7 +1676,12 @@ function fileLink(name, data, type, text) {
 // downloaded asks the browser to confirm.
 const made = new Set(), got = new Set();
 function madeGroup(g) { made.add(g); got.delete(g); }
-function dropGroup(g) { made.delete(g); got.delete(g); }
+function dropGroup(g) { made.delete(g); got.delete(g); revokeLinks(g); }
+// The object URLs of each group's download line, freed when the line is
+// replaced or its files are set aside; the files themselves stay in memory
+// while "Download everything" can still save them.
+const lineUrls = {};
+function revokeLinks(g) { for (const u of lineUrls[g] || []) URL.revokeObjectURL(u); lineUrls[g] = []; }
 // "Write the email" sends the page to a mailto: address, which the browser
 // treats as leaving the page although the page stays; it sets this flag for
 // a moment so that it raises no warning. The address under the button, a
@@ -1662,6 +1700,7 @@ const DL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 const sizeText = (n) => n < 1e3 ? n + ' B' : n < 1e6 ? Math.round(n / 1e3) + ' KB' : (n / 1e6).toFixed(1) + ' MB';
 // items: [file name, contents, media type, label, kind shown beside it]
 function downloadLine(group, items) {
+  revokeLinks(group);
   const box = document.createElement('div'); box.className = 'dl';
   const label = document.createElement('span'); label.className = 'dl-label';
   label.innerHTML = DL_ICON + 'Download';
@@ -1674,6 +1713,7 @@ function downloadLine(group, items) {
     small.textContent = `${kind}, ${sizeText(new Blob([data]).size)}`;
     a.append(small);
     a.title = name;
+    lineUrls[group].push(a.href);
     a.addEventListener('click', () => { a.classList.add('got'); got.add(group); });
     box.append(a);
   }
@@ -1954,9 +1994,9 @@ const yamlName = (n) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(n) && !YAML_WORDS.test(n
 let groupChoice = {};
 function buildGroupBy() {
   const cols = parseCSV(prepared, 1)[0].filter(c => !CORE_COLUMNS.includes(c));
-  // An empty choice is kept only when someone made it: a list not built yet
-  // starts at the default.
-  const sel = $('group-by'), keep = wantGroup != null ? wantGroup : sel.options.length ? sel.value : null;
+  // An empty choice is kept only when someone made it: a list not built yet,
+  // or one whose only entry was the empty one, starts at the default.
+  const sel = $('group-by'), keep = wantGroup != null ? wantGroup : sel.options.length > 1 ? sel.value : null;
   wantGroup = null;
   sel.innerHTML = cols.map(c => `<option value="${esc(c)}">${esc(GROUP_LABELS[c] || c)}</option>`).join('') +
     `<option value="">${cols.length ? '(no comparison of animal groups)' : '(nothing: no column is ticked in step 3)'}</option>`;
@@ -2204,26 +2244,40 @@ $('run-btn').onclick = async () => {
     await webR.evalRVoid(`setwd('/mlos')
       Sys.setenv(MLOS_SETTINGS_FILE = 'settings.yaml', MLOS_DATA_FILE = 'prepared.csv', MLOS_OUTPUT_DIR = '${out}')
       source('mlos_run_complete.R')`);
-    mark('analyze', t0);
-    st.className = 'status ok';
-    st.textContent = `Finished in ${window.demo.timings.analyze} s.`;
-    lastRunCap = capValue();
-    lastRunLead = exportFacts() && windowLead(exportFacts());
-    const wasLeft = leftDuringRun;
-    // An answer changed during the run sets the prepared data aside, and
-    // preparing again replaces it; either way the results are out of date
-    // as soon as they appear.
-    setRunning(false, prepared === from.data && preparedConfig === from.config ? 'done' : 'stale');
-    if (wasLeft) st.textContent += ' The tab was out of sight for part of the run, which can make it take longer.';
-    runFacts = facts;
-    await showRun(out, from);
   } catch (e) {
     st.className = 'status bad';
     st.textContent = 'The analysis stopped. mLOS, the program that runs it, reports: ' + rError(e);
     runStopped = true;
     window.demo.errors.push(String(e));
     stop();
+    oldRuns.push(out); freeOldRuns();
+    if (!shareRes) renderShare();
+    return;
+  }
+  mark('analyze', t0);
+  st.className = 'status ok';
+  st.textContent = `Finished in ${window.demo.timings.analyze} s.`;
+  lastRunCap = capValue();
+  lastRunLead = exportFacts() && windowLead(exportFacts());
+  const wasLeft = leftDuringRun;
+  // An answer changed during the run sets the prepared data aside, and
+  // preparing again replaces it; either way the results are out of date
+  // as soon as they appear.
+  setRunning(false, prepared === from.data && preparedConfig === from.config ? 'done' : 'stale');
+  if (wasLeft) st.textContent += ' The tab was out of sight for part of the run, which can make it take longer.';
+  runFacts = facts;
+  // mLOS finished; a failure from here on is the page's, in reading or
+  // showing the results, and the message says so.
+  try {
+    await showRun(out, from);
+  } catch (e) {
+    st.className = 'status bad';
+    st.textContent = 'The analysis finished, but the page could not show all of its results: ' + (e.message || e) +
+      (lastRun && lastRun.out === out ? ' "Download everything" in step 10 holds the files it wrote.' : '');
+    window.demo.errors.push(String(e));
+    $('run-results').hidden = false;
     if (!lastRun || lastRun.out !== out) { oldRuns.push(out); freeOldRuns(); }
+    if (!$('run-results').childElementCount) stayBanner('idle');
   }
   endBusy($('run-btn'));
   if (!shareRes) renderShare();
@@ -2766,8 +2820,11 @@ json.dumps({'built': built, 'error': error, 'seconds': seconds,
 
 $('deck-btn').onclick = async () => {
   const st = $('s7-status');
+  // The run the deck is built from. A run that finishes while the deck is
+  // built replaces it, and the deck is then set aside, not paired with it.
+  const run = lastRun;
   await startBusy($('deck-btn'), $('tables-only').checked ? 'Building the tables...' : 'Building the deck...');
-  $('deck-results').replaceChildren();
+  $('deck-results').replaceChildren(); revokeLinks('deck');
   st.className = 'status';
   st.textContent = deckLoaded ? 'Building...' : 'Loading the program that builds the deck (the first time takes a little longer)...';
   try {
@@ -2776,12 +2833,18 @@ $('deck-btn').onclick = async () => {
     await paint();
     py.FS.mkdirTree('/results');
     for (const f of py.FS.readdir('/results')) if (f !== '.' && f !== '..') py.FS.unlink('/results/' + f);
-    await readRun(lastRun, (n, bytes) => py.FS.writeFile('/results/' + n, bytes));
+    await readRun(run, (n, bytes) => py.FS.writeFile('/results/' + n, bytes));
     const t0 = performance.now();
     py.globals.set('tables_only', $('tables-only').checked);
     const result = JSON.parse(py.runPython(DECK_PY));
     mark('deck', t0);
     window.demo.deck = result;
+    if (lastRun !== run) {
+      st.className = 'status warn';
+      st.textContent = 'A new run of the analysis finished while the deck was being built, so this deck, made from the run before it, is set aside. Build the deck again.';
+      endBusy($('deck-btn'));
+      return;
+    }
     showDeck(py, result);
     deckState = result.built === 'deck' ? 'slides and tables' : result.error ? 'slides failed, tables built' : 'tables only';
     if (shareRes) renderShare();

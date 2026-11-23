@@ -4,7 +4,17 @@ Each release lists what changed for a visitor to the page, and whether any chang
 
 ## Unreleased
 
-**Numbers.** One change can move a number. In step 8, an outcome type containing EUTH, DIED, LOST, ESCAPED, or STOLEN starts as non-live ahead of every other guess. Before, a label that also contained RTO started as community live, and one that also contained FIELD or RTF as other live; ESCAPED started with no guess. For San Diego County DAS's export of 2024-12-27 (`DAS Animal Inventory_1.1.14 - 12.27.24.xlsx`, all species), EUTH FIELD (6,937 rows) moves from other live to non-live, and ESCAPED (38 rows) starts as non-live. A run that keeps the starting answers for such a label gives different results; a run whose answers set each label gives the same results.
+**Numbers.** Two changes can move a number. When the data is prepared with no column ticked under "Ways to compare animals" in step 3, and prepared again after one is ticked, step 8 now compares animals by the age group, when it is ticked, or else by the first ticked column. It kept "no comparison of animal groups", the only entry the first list had, as if the visitor had chosen it. A run that keeps that starting answer now compares animal groups, and its results change. In step 8, an outcome type containing EUTH, DIED, LOST, ESCAPED, or STOLEN starts as non-live ahead of every other guess. Before, a label that also contained RTO started as community live, and one that also contained FIELD or RTF as other live; ESCAPED started with no guess. For San Diego County DAS's export of 2024-12-27 (`DAS Animal Inventory_1.1.14 - 12.27.24.xlsx`, all species), EUTH FIELD (6,937 rows) moves from other live to non-live, and ESCAPED (38 rows) starts as non-live. A run that keeps the starting answers for such a label gives different results; a run whose answers set each label gives the same results.
+
+**Fixes.**
+
+- A ShelterDataPrep configuration loaded in step 1 before the file, or before another sheet was chosen, keeps its own study window. Loading the file replaced it with the window the page works out, and the checks of the window, and the dates step 5 showed, described that window rather than the one the configuration runs. The preparation always used the configuration's own window. No numbers move.
+- A file that cannot be read, such as a damaged .gz file, gets a message saying so. The page kept saying "Reading..." without end. Choosing the same file again loads it again. No numbers move.
+- When a file, a workbook, or a sheet cannot be read, the message names the file the steps still use. When the sheet that cannot be read is in the workbook already in use, the list of sheets shows the sheet in use again. No numbers move.
+- An error message about a workbook or a file names it once. A file whose name holds `export.xlsx` or `export.csv`, such as `shelter_export.xlsx`, was named with that part repeated. No numbers move.
+- When mLOS finishes but the page cannot show its results, the page says so, rather than reporting that mLOS stopped. The results it did show stay current, and "Download everything" holds the files the run wrote. No numbers move.
+- A deck built from one run, while a newer run finishes, is set aside with a message, rather than shown, and saved by "Download everything", as the newer run's deck. No numbers move.
+- The download links of the prepared data and of the deck free their memory when they are replaced, as those of a run already did. No numbers move.
 
 ## 0.3.0 (2026-11-14)
 
