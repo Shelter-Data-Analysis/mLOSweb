@@ -1784,10 +1784,14 @@ const OUTCOME_CLASSES = [
 ];
 const OUTCOME_GUESSES = [
   [/^_UNKNOWN_$/, 'in_care'],
-  // A label naming a death, a euthanasia, or a loss is non-live wherever it
-  // happened, so EUTH FIELD is non-live, before FIELD sends a label to other
-  // live and RTO to community live.
-  [/EUTH|DIED|LOST|ESCAPED|STOLEN/, 'N'],
+  // FOUND EXP, LOST EXP, and HOME EXP, as in Orange County's export, are not
+  // stays, so LOST EXP is removed before LOST makes a label non-live.
+  [/(FOUND|LOST|HOME)[\s_-]*EXP/, 'delete'],
+  // A label naming a death, a euthanasia, a loss, an escape, or a theft is
+  // non-live wherever it happened, so EUTH FIELD is non-live, before FIELD
+  // sends a label to other live and RTO to community live. ESC counts where
+  // no letter comes before it, so ESC and ESCAPED match and RESCUE does not.
+  [/EUTH|DIED|LOST|STOLEN|THEFT|(^|[^A-Z])ESC/, 'N'],
   // A label naming a return to owner is one wherever it was made, so RTO-FIELD
   // is community live, before FIELD sends a label to other live.
   [/RTO/, 'L'],
